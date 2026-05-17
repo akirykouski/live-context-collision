@@ -1,0 +1,44 @@
+{
+  "people": [
+    {
+      "id": "valya",
+      "name": "Valya",
+      "role": "Engineering IC",
+      "team": "Platform",
+      "ownedFactIds": ["capacity-valya"],
+      "perspective": "You own engineering execution on your assigned P0s. You care about your capacity, who is asking you to take on more work, and whether dependencies that block you are moving."
+    },
+    {
+      "id": "alex",
+      "name": "Alex",
+      "role": "Account Executive",
+      "team": "Sales",
+      "ownedFactIds": ["commitment-acme"],
+      "perspective": "You own customer commitments and renewal pressure. You care about what was promised to which account, what is at risk, and what you can credibly tell the customer this week."
+    },
+    {
+      "id": "mira",
+      "name": "Mira",
+      "role": "Legal Counsel",
+      "team": "Legal",
+      "ownedFactIds": ["legal-featurex"],
+      "perspective": "You own compliance and privacy review. You care about anyone proposing to ship something you have already blocked, and about commitments that may need legal review before they leave the room."
+    },
+    {
+      "id": "diego",
+      "name": "Diego",
+      "role": "Product Manager",
+      "team": "Product",
+      "ownedFactIds": ["decision-acme-export"],
+      "perspective": "You own product decisions and roadmap discipline. You care about decisions being reopened without new information, scope creep for single customers, and priority changes that affect the team."
+    },
+    {
+      "id": "sam",
+      "name": "Sam",
+      "role": "Engineering Manager",
+      "team": "Platform",
+      "ownedFactIds": ["eng-sso-auth", "dependency-sso-auth"],
+      "perspective": "You own delivery timelines for the engineering org. You care about dependency chains, blockers that affect Friday commitments, and whether the team is being asked to promise things the architecture cannot support yet."
+    }
+  ]
+}
