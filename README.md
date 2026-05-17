@@ -46,11 +46,15 @@ streaming.
 
 ## Setup
 
+One command — installs deps on first run, checks keys, starts the server:
+
 ```bash
 cp .env.example .env.local   # fill SPEECHMATICS_API_KEY and GEMINI_API_KEY
-npm install
-npm run dev                  # http://localhost:3000
+./launch.sh                  # dev → http://localhost:3000
+./launch.sh --prod           # production build + start
 ```
+
+Or manually: `npm install && npm run dev`.
 
 Keys:
 - Speechmatics — https://portal.speechmatics.com → API keys
