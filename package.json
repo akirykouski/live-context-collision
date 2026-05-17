@@ -1,0 +1,27 @@
+{
+  "name": "live-context-collision",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Live Context Collision — a real-time meeting agent that surfaces missing organizational memory exactly when decisions are being made.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start -p ${PORT:-3000}",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^2.3.0",
+    "@speechmatics/auth": "^0.1.0",
+    "@speechmatics/real-time-client": "^8.3.2",
+    "next": "15.1.6",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "typescript": "^5.7.0"
+  }
+}

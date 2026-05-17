@@ -1,0 +1,70 @@
+{
+  "facts": [
+    {
+      "id": "legal-featurex",
+      "type": "legal_blocker",
+      "entity": "Feature X",
+      "related": ["Acme", "launch", "data retention", "DPA", "privacy"],
+      "status": "active",
+      "source": "Legal Review, May 12",
+      "statement": "Do not proceed with Feature X until the DPA update is approved.",
+      "reason": "Customer data retention risk.",
+      "severity": "high"
+    },
+    {
+      "id": "eng-sso-auth",
+      "type": "engineering_blocker",
+      "entity": "SSO",
+      "related": ["Auth Refactor", "Acme", "launch", "Friday"],
+      "status": "active",
+      "source": "Engineering Sync, May 14",
+      "statement": "SSO depends on the Auth Refactor. Auth Refactor cannot be completed before next Wednesday.",
+      "reason": "Auth Refactor is mid-flight and gates the SSO release.",
+      "severity": "high"
+    },
+    {
+      "id": "decision-acme-export",
+      "type": "decision",
+      "entity": "custom export for Acme",
+      "related": ["Acme", "export"],
+      "status": "active",
+      "source": "Product Sync, last Tuesday",
+      "statement": "Decision: do not build custom export for Acme.",
+      "reason": "Engineering cost is too high for one customer.",
+      "severity": "medium"
+    },
+    {
+      "id": "capacity-valya",
+      "type": "person_capacity",
+      "entity": "Valya",
+      "related": ["P0", "priority", "owner", "assign"],
+      "status": "active",
+      "source": "Priority board, current",
+      "statement": "Valya already owns 3 active P0 priorities.",
+      "activeP0s": ["Acme launch", "Auth refactor", "QA stabilization"],
+      "rule": "No new P0 without downgrading an existing P0.",
+      "severity": "high"
+    },
+    {
+      "id": "commitment-acme",
+      "type": "commitment",
+      "entity": "Acme",
+      "related": ["customer", "launch", "Friday", "Sales"],
+      "status": "active",
+      "source": "Account context, Sales",
+      "statement": "Acme is a high-value customer. Sales wants to promise a launch by Friday.",
+      "reason": "Renewal pressure on the Acme account.",
+      "severity": "medium"
+    },
+    {
+      "id": "dependency-sso-auth",
+      "type": "dependency",
+      "entity": "SSO",
+      "related": ["Auth Refactor", "launch", "Friday"],
+      "status": "active",
+      "source": "Engineering Sync, May 14",
+      "statement": "SSO launch is blocked on Auth Refactor completion (no earlier than next Wednesday).",
+      "severity": "high"
+    }
+  ]
+}
