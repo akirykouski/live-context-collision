@@ -1,18 +1,9 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { generateContent } from "./ai-gateway";
 import { retrieveRelevant } from "./memory";
 import type { CollisionCard, CollisionResult, MemoryFact } from "./types";
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-
-let client: GoogleGenAI | null = null;
-function genai(): GoogleGenAI {
-  if (!client) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-    client = new GoogleGenAI({ apiKey });
-  }
-  return client;
-}
 
 /**
  * The brief defines six agent roles (Transcript, Decision Extractor, Memory
@@ -145,7 +136,7 @@ export async function analyzeUtterance(
     2,
   );
 
-  const res = await genai().models.generateContent({
+  const { response: res } = await generateContent({
     model: MODEL,
     contents: prompt,
     config: {
