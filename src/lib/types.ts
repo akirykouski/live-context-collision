@@ -70,3 +70,77 @@ export interface CollisionResult {
   collisionDetected: boolean;
   cards: CollisionCard[];
 }
+
+// ─────────────────────────── personal summary ──────────────────────────
+
+/**
+ * A named person on the team. After the meeting ends, the user picks one of
+ * these to generate a personal post-meeting summary written from that
+ * perspective.
+ */
+export interface Person {
+  id: string;
+  name: string;
+  role: string;
+  team: string;
+  /** Memory fact ids this person personally owns or is closely tied to. */
+  ownedFactIds: string[];
+  /** First-person framing of what this person cares about — fed to the LLM
+   * so the summary is genuinely personal, not a generic recap. */
+  perspective: string;
+}
+
+/** A concrete thing this person committed to, was assigned, or now owns. */
+export interface PersonalActionItem {
+  /** The action, phrased in second person ("Confirm with Legal that…"). */
+  item: string;
+  /** Loose due hint ("by Friday", "before next sync"). Empty if unspecified. */
+  dueHint?: string;
+  /** Verbatim excerpt from the meeting that established this item. */
+  basedOn: string;
+}
+
+/** A decision the meeting reached that touches this person's scope. */
+export interface PersonalDecision {
+  /** What was decided, in plain English. */
+  decision: string;
+  /** Why it matters to *this* person specifically. */
+  whyItMattersToYou: string;
+  /** Speaker who drove the decision, if identifiable. */
+  driver?: string;
+}
+
+/** A collision card from the meeting that involved this person. */
+export interface PersonalFlag {
+  collisionType: CollisionType;
+  headline: string;
+  severity: Severity;
+  /** Why this flag is relevant to this person (owner, blocker, etc.). */
+  relevance: string;
+}
+
+/** A question raised in the meeting that was never resolved. */
+export interface PersonalOpenQuestion {
+  question: string;
+  /** Why this person should be the one to pick it up. */
+  whyYou: string;
+}
+
+/**
+ * The structured personal post-meeting summary, written from one named
+ * person's point of view. Shown in a modal after the user picks who they are.
+ */
+export interface PersonalSummary {
+  person: { id: string; name: string; role: string };
+  /** One sentence at the top: the most important takeaway for this person. */
+  bottomLine: string;
+  actionItems: PersonalActionItem[];
+  decisionsAffectingYou: PersonalDecision[];
+  flagsRaised: PersonalFlag[];
+  openQuestions: PersonalOpenQuestion[];
+}
+
+/** Engine response for a personal summary request. */
+export interface PersonalSummaryResult {
+  summary: PersonalSummary;
+}
