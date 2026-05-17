@@ -1,4 +1,5 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { Type } from "@google/genai";
+import { generateContent } from "./ai-gateway";
 import { allFacts } from "./memory";
 import type {
   CollisionCard,
@@ -10,16 +11,6 @@ import type {
 } from "./types";
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
-
-let client: GoogleGenAI | null = null;
-function genai(): GoogleGenAI {
-  if (!client) {
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-    client = new GoogleGenAI({ apiKey });
-  }
-  return client;
-}
 
 /**
  * The post-meeting personal summary engine.
@@ -212,7 +203,7 @@ export async function summarizeForPerson(
     2,
   );
 
-  const res = await genai().models.generateContent({
+  const { response: res } = await generateContent({
     model: MODEL,
     contents: prompt,
     config: {
