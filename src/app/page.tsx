@@ -9,7 +9,10 @@ import type {
   MemoryFact,
   Person,
   PersonalSummary,
+  ServiceAction,
+  ServiceAgentKind,
   Utterance,
+  WorkArtifact,
 } from "@/lib/types";
 
 const SEV_VAR: Record<string, string> = {
@@ -54,12 +57,48 @@ const CTYPE_LABEL: Record<string, string> = {
   customer_promise: "Customer Promise",
 };
 
+const AGENT_LABEL: Record<ServiceAgentKind, string> = {
+  github: "GitHub Agent",
+  jira_notion: "Jira / Notion Agent",
+  gmail: "Gmail Agent",
+};
+
+const AGENT_COLOR: Record<ServiceAgentKind, string> = {
+  github: "var(--low)",
+  jira_notion: "var(--medium)",
+  gmail: "var(--calm)",
+};
+
+const ACTION_LABEL: Record<string, string> = {
+  create: "Created",
+  update: "Updated",
+  reassign: "Reassigned",
+  change_priority: "Priority changed",
+  change_status: "Status changed",
+  create_draft: "Draft created",
+  append_note: "Note appended",
+};
+
 type ModalStep = "picker" | "loading" | "result" | "error";
+type ActiveView = "live" | "actions";
+
+function applyActionsLocal(
+  artifacts: WorkArtifact[],
+  actions: ServiceAction[],
+): WorkArtifact[] {
+  const byId = new Map(artifacts.map((artifact) => [artifact.id, artifact]));
+  for (const action of actions) byId.set(action.after.id, action.after);
+  return [...byId.values()];
+}
 
 export default function Page() {
+  const [activeView, setActiveView] = useState<ActiveView>("live");
   const [utterances, setUtterances] = useState<Utterance[]>([]);
   const [cards, setCards] = useState<CollisionCard[]>([]);
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
+  const [workArtifacts, setWorkArtifacts] = useState<WorkArtifact[]>([]);
+  const [serviceActions, setServiceActions] = useState<ServiceAction[]>([]);
+  const [serviceNotice, setServiceNotice] = useState<string | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
   const histRef = useRef<{ speaker: string; text: string }[]>([]);
@@ -73,9 +112,26 @@ export default function Page() {
   const facts = seed.facts as MemoryFact[];
   const people = peopleSeed.people as Person[];
 
-  const analyze = useCallback(async (u: Utterance) => {
-    const recent = histRef.current.slice(-6);
-    histRef.current.push({ speaker: u.speaker, text: u.text });
+  const loadWorkContext = useCallback(async () => {
+    try {
+      const res = await fetch("/api/work-context");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "work context error");
+      setWorkArtifacts(data.artifacts ?? []);
+      setServiceActions([...(data.actions ?? [])].reverse());
+    } catch {
+      /* Action Center should not block the live meeting surface. */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadWorkContext();
+  }, [loadWorkContext]);
+
+  const analyze = useCallback(async (
+    u: Utterance,
+    recent: { speaker: string; text: string }[],
+  ) => {
     try {
       const res = await fetch("/api/collision", {
         method: "POST",
@@ -96,12 +152,48 @@ export default function Page() {
     }
   }, []);
 
+  const analyzeServiceAction = useCallback(
+    async (u: Utterance, recent: { speaker: string; text: string }[]) => {
+      try {
+        const res = await fetch("/api/service-actions", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            speaker: u.speaker,
+            text: u.text,
+            recentTranscript: recent,
+          }),
+        });
+        const data = await res.json();
+        const actions = (data.actions ?? []) as ServiceAction[];
+        if (!res.ok || actions.length === 0) return;
+
+        setServiceActions((prev) => [...[...actions].reverse(), ...prev]);
+        setWorkArtifacts((prev) => applyActionsLocal(prev, actions));
+
+        const first = actions[0];
+        setServiceNotice(
+          `${AGENT_LABEL[first.agent]} applied ${actions.length} update${
+            actions.length === 1 ? "" : "s"
+          }`,
+        );
+        window.setTimeout(() => setServiceNotice(null), 3200);
+      } catch {
+        /* keep the meeting flowing even if an agent misses a turn */
+      }
+    },
+    [],
+  );
+
   const onUtterance = useCallback(
     (u: Utterance) => {
+      const recent = histRef.current.slice(-6);
+      histRef.current.push({ speaker: u.speaker, text: u.text });
       setUtterances((prev) => [...prev, u]);
-      void analyze(u);
+      void analyze(u, recent);
+      void analyzeServiceAction(u, recent);
     },
-    [analyze],
+    [analyze, analyzeServiceAction],
   );
 
   const { status, partial, error, start, stop } = useSpeechmatics(onUtterance);
@@ -161,6 +253,17 @@ export default function Page() {
     [utterances, cards],
   );
 
+  const resetActions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/work-context/reset", { method: "POST" });
+      if (!res.ok) return;
+      setServiceActions([]);
+      await loadWorkContext();
+    } catch {
+      /* local demo reset failed; leave the current view untouched */
+    }
+  }, [loadWorkContext]);
+
   const meetingHasContent = utterances.length > 0;
   const showReopen = !modalOpen && !listening && meetingHasContent;
 
@@ -186,6 +289,24 @@ export default function Page() {
               : "● Start meeting"}
         </button>
 
+        <div className="view-switch" aria-label="Command center view">
+          <button
+            data-active={activeView === "live"}
+            onClick={() => setActiveView("live")}
+          >
+            Live
+          </button>
+          <button
+            data-active={activeView === "actions"}
+            onClick={() => setActiveView("actions")}
+          >
+            Actions
+            {serviceActions.length > 0 && (
+              <span className="nav-count">{serviceActions.length}</span>
+            )}
+          </button>
+        </div>
+
         {showReopen && (
           <button className="modal-close" onClick={reopenSummary}>
             ▸ Open summary
@@ -199,6 +320,8 @@ export default function Page() {
           {status === "listening" && "listening · live"}
           {status === "error" && "error"}
         </div>
+
+        {serviceNotice && <div className="agent-toast">{serviceNotice}</div>}
 
         <div className="chips">
           {facts.map((f) => (
@@ -216,8 +339,9 @@ export default function Page() {
 
       {error && <div className="banner">SPEECHMATICS: {error}</div>}
 
-      <main className="main">
-        <section className="col">
+      {activeView === "live" ? (
+        <main className="main">
+          <section className="col">
           <div className="col-head">
             <span>Live Meeting Transcript</span>
             <span className="count">{utterances.length} utterances</span>
@@ -240,9 +364,9 @@ export default function Page() {
             ))}
             {partial && <div className="partial">{partial}</div>}
           </div>
-        </section>
+          </section>
 
-        <section className="col">
+          <section className="col">
           <div className="col-head">
             <span>Context Collisions</span>
             <span className="count">
@@ -299,8 +423,15 @@ export default function Page() {
               ))
             )}
           </div>
-        </section>
-      </main>
+          </section>
+        </main>
+      ) : (
+        <ActionCenter
+          artifacts={workArtifacts}
+          actions={serviceActions}
+          onReset={resetActions}
+        />
+      )}
 
       {modalOpen && (
         <SummaryModal
@@ -320,6 +451,182 @@ export default function Page() {
         />
       )}
     </div>
+  );
+}
+
+// ─────────────────────────── action center ─────────────────────────────
+
+interface ActionCenterProps {
+  artifacts: WorkArtifact[];
+  actions: ServiceAction[];
+  onReset: () => void;
+}
+
+const AGENT_ORDER: ServiceAgentKind[] = ["github", "jira_notion", "gmail"];
+
+function agentForArtifact(kind: WorkArtifact["kind"]): ServiceAgentKind {
+  if (kind === "github_issue") return "github";
+  if (kind === "email_thread" || kind === "email_draft") return "gmail";
+  return "jira_notion";
+}
+
+function artifactKindLabel(kind: WorkArtifact["kind"]): string {
+  switch (kind) {
+    case "github_issue":
+      return "GitHub issue";
+    case "jira_task":
+      return "Jira task";
+    case "notion_task":
+      return "Notion task";
+    case "email_thread":
+      return "Email thread";
+    case "email_draft":
+      return "Email draft";
+    default:
+      return kind;
+  }
+}
+
+function valueOrDash(value: string | undefined): string {
+  return value && value.trim() ? value : "—";
+}
+
+function fieldDiffs(action: ServiceAction) {
+  const before = action.before;
+  const after = action.after;
+  const fields: { key: keyof WorkArtifact; label: string }[] = [
+    { key: "assignee", label: "Assignee" },
+    { key: "priority", label: "Priority" },
+    { key: "status", label: "Status" },
+    { key: "customer", label: "Customer" },
+    { key: "title", label: "Title" },
+  ];
+
+  if (!before) {
+    return fields
+      .filter(({ key }) => typeof after[key] === "string")
+      .map(({ key, label }) => ({
+        label,
+        before: "Created",
+        after: valueOrDash(after[key] as string | undefined),
+      }));
+  }
+
+  return fields
+    .filter(({ key }) => before[key] !== after[key])
+    .map(({ key, label }) => ({
+      label,
+      before: valueOrDash(before[key] as string | undefined),
+      after: valueOrDash(after[key] as string | undefined),
+    }));
+}
+
+function ActionCenter({ artifacts, actions, onReset }: ActionCenterProps) {
+  const watchedByAgent = AGENT_ORDER.map((agent) => ({
+    agent,
+    artifacts: artifacts.filter((artifact) => agentForArtifact(artifact.kind) === agent),
+    actions: actions.filter((action) => action.agent === agent),
+  }));
+
+  return (
+    <main className="actions-main">
+      <div className="actions-head">
+        <div>
+          <div className="actions-eyebrow">Service agent layer</div>
+          <h1>Action Center</h1>
+          <p>{actions.length} applied updates · {artifacts.length} artifacts watched</p>
+        </div>
+        <button
+          className="modal-close"
+          onClick={onReset}
+          disabled={actions.length === 0}
+        >
+          Reset demo actions
+        </button>
+      </div>
+
+      <section className="agent-strip">
+        {watchedByAgent.map(({ agent, artifacts: watched, actions: agentActions }) => (
+          <article
+            className="agent-tile"
+            key={agent}
+            style={{ ["--agent" as string]: AGENT_COLOR[agent] }}
+          >
+            <div className="agent-name">{AGENT_LABEL[agent]}</div>
+            <div className="agent-metric">
+              {agentActions.length}
+              <span>applied</span>
+            </div>
+            <div className="agent-foot">{watched.length} artifacts watched</div>
+          </article>
+        ))}
+      </section>
+
+      <section className="action-feed">
+        <div className="feed-head">
+          <span>Operational trail</span>
+          <span>{actions.length > 0 ? `${actions.length} actions` : "empty"}</span>
+        </div>
+
+        {actions.length === 0 ? (
+          <div className="actions-empty">
+            <div className="ring">↗</div>
+            <span>No service actions yet</span>
+            <p>Operational updates will appear here.</p>
+          </div>
+        ) : (
+          actions.map((action) => (
+            <ActionCard action={action} key={action.id} />
+          ))
+        )}
+      </section>
+    </main>
+  );
+}
+
+function ActionCard({ action }: { action: ServiceAction }) {
+  const diffs = fieldDiffs(action);
+
+  return (
+    <article
+      className="agent-action-card"
+      style={{ ["--agent" as string]: AGENT_COLOR[action.agent] }}
+    >
+      <div className="agent-card-head">
+        <span className="agent-badge">{AGENT_LABEL[action.agent]}</span>
+        <span className="agent-action-kind">
+          {ACTION_LABEL[action.actionType] ?? action.actionType}
+        </span>
+      </div>
+
+      <h2>{action.title}</h2>
+      <div className="artifact-line">
+        {artifactKindLabel(action.artifactKind)}
+        {action.after.urlLabel ? ` · ${action.after.urlLabel}` : ""}
+      </div>
+      <p>{action.rationale}</p>
+
+      {diffs.length > 0 && (
+        <div className="diff-grid">
+          {diffs.map((diff) => (
+            <div className="diff-row" key={diff.label}>
+              <span className="diff-label">{diff.label}</span>
+              <span className="diff-before">{diff.before}</span>
+              <span className="diff-arrow">→</span>
+              <span className="diff-after">{diff.after}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {action.after.body && action.before?.body !== action.after.body && (
+        <div className="action-body-preview">{action.after.body}</div>
+      )}
+
+      <div className="trigger-line">
+        Based on <b>{action.basedOn.speaker}</b>: “{action.basedOn.text}”
+      </div>
+    </article>
   );
 }
 

@@ -144,3 +144,68 @@ export interface PersonalSummary {
 export interface PersonalSummaryResult {
   summary: PersonalSummary;
 }
+
+// ───────────────────────── service agents / action center ────────────────
+
+export type ServiceAgentKind = "github" | "jira_notion" | "gmail";
+
+export type WorkArtifactKind =
+  | "github_issue"
+  | "jira_task"
+  | "notion_task"
+  | "email_thread"
+  | "email_draft";
+
+export type WorkPriority = "P0" | "P1" | "P2" | "P3";
+
+export type ServiceActionType =
+  | "create"
+  | "update"
+  | "reassign"
+  | "change_priority"
+  | "change_status"
+  | "create_draft"
+  | "append_note";
+
+export interface WorkArtifact {
+  id: string;
+  kind: WorkArtifactKind;
+  title: string;
+  status?: string;
+  priority?: WorkPriority;
+  assignee?: string;
+  customer?: string;
+  source?: string;
+  urlLabel?: string;
+  body?: string;
+  updatedAt?: string;
+  metadata?: Record<string, string | number | boolean | string[]>;
+}
+
+export interface ServiceAction {
+  id: string;
+  agent: ServiceAgentKind;
+  actionType: ServiceActionType;
+  artifactKind: WorkArtifactKind;
+  artifactId: string;
+  title: string;
+  rationale: string;
+  basedOn: {
+    speaker: string;
+    text: string;
+  };
+  before?: WorkArtifact;
+  after: WorkArtifact;
+  status: "proposed" | "applied";
+  createdAt: number;
+}
+
+export interface WorkContextResult {
+  artifacts: WorkArtifact[];
+  actions: ServiceAction[];
+}
+
+export interface ServiceActionResult {
+  actionDetected: boolean;
+  actions: ServiceAction[];
+}
