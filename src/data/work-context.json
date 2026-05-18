@@ -1,0 +1,102 @@
+{
+  "artifacts": [
+    {
+      "id": "gh-auth-refactor",
+      "kind": "github_issue",
+      "title": "Auth Refactor blocks SSO launch",
+      "status": "open",
+      "priority": "P0",
+      "assignee": "Valya",
+      "customer": "Acme",
+      "source": "GitHub issue GH-42",
+      "urlLabel": "GH-42",
+      "body": "SSO launch is blocked until Auth Refactor is complete. Current owner is Valya; target cannot be earlier than next Wednesday.",
+      "updatedAt": "2026-05-14T15:20:00.000Z",
+      "metadata": {
+        "repo": "platform/auth",
+        "labels": ["sso", "auth-refactor", "launch-blocker"]
+      }
+    },
+    {
+      "id": "gh-sso-cleanup",
+      "kind": "github_issue",
+      "title": "SSO dependency cleanup after Auth Refactor",
+      "status": "backlog",
+      "priority": "P2",
+      "assignee": "Sam",
+      "customer": "Acme",
+      "source": "GitHub issue GH-51",
+      "urlLabel": "GH-51",
+      "body": "Follow-up cleanup for SSO dependency handling once Auth Refactor lands.",
+      "updatedAt": "2026-05-15T09:30:00.000Z",
+      "metadata": {
+        "repo": "platform/auth",
+        "labels": ["sso", "cleanup"]
+      }
+    },
+    {
+      "id": "jira-acme-launch",
+      "kind": "jira_task",
+      "title": "Acme launch readiness",
+      "status": "in_progress",
+      "priority": "P1",
+      "assignee": "Diego",
+      "customer": "Acme",
+      "source": "Jira ACME-17",
+      "urlLabel": "ACME-17",
+      "body": "Coordinate Acme launch plan, customer messaging, and release readiness across Product, Legal, and Platform.",
+      "updatedAt": "2026-05-15T12:15:00.000Z",
+      "metadata": {
+        "board": "Customer Launches",
+        "linkedFacts": ["commitment-acme", "legal-featurex"]
+      }
+    },
+    {
+      "id": "notion-featurex-decision",
+      "kind": "notion_task",
+      "title": "Decision log: Feature X is blocked pending DPA approval",
+      "status": "active",
+      "priority": "P1",
+      "assignee": "Mira",
+      "customer": "Acme",
+      "source": "Notion Product Decisions",
+      "urlLabel": "DEC-Feature-X",
+      "body": "Legal review blocked Feature X until DPA update is approved. Product and Sales must not promise a Friday launch.",
+      "updatedAt": "2026-05-12T17:00:00.000Z",
+      "metadata": {
+        "workspace": "Product Ops",
+        "linkedFacts": ["legal-featurex"]
+      }
+    },
+    {
+      "id": "email-acme-renewal",
+      "kind": "email_thread",
+      "title": "Acme renewal pressure and Friday launch request",
+      "status": "sent",
+      "customer": "Acme",
+      "source": "Gmail thread with Acme",
+      "urlLabel": "Gmail: Acme renewal",
+      "body": "Acme asked whether the team can commit to a Friday launch window. Sales has not yet sent a revised promise.",
+      "updatedAt": "2026-05-16T10:05:00.000Z",
+      "metadata": {
+        "from": "alex@company.test",
+        "to": "acme-procurement@example.com"
+      }
+    },
+    {
+      "id": "email-legal-dpa",
+      "kind": "email_thread",
+      "title": "Legal DPA update required before Feature X",
+      "status": "sent",
+      "customer": "Acme",
+      "source": "Gmail thread with Legal",
+      "urlLabel": "Gmail: DPA review",
+      "body": "Legal confirmed Feature X cannot proceed until the DPA update is approved.",
+      "updatedAt": "2026-05-12T18:30:00.000Z",
+      "metadata": {
+        "from": "mira@company.test",
+        "to": "product-leads@company.test"
+      }
+    }
+  ]
+}
