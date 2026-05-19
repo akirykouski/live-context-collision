@@ -180,20 +180,22 @@ describe("ai-gateway.generateContent failover", () => {
     expect(s.find((x) => x.label === "GEMINI_API_KEY")?.failures).toBe(1);
   });
 
-  it("throws immediately on a non-retryable error without burning other keys", async () => {
+  it("throws a sanitized non-retryable GatewayError without burning other keys", async () => {
     process.env.GEMINI_API_KEY = "k1";
     process.env.GEMINI_API_KEY_2 = "k2";
-    const { generateContent } = await loadGateway();
-    program({ k1: () => ({ status: 400, message: "bad request" }) });
-    // The mock throws the returned Error-like; emulate a thrown object.
+    const { generateContent, GatewayError } = await loadGateway();
+    // Emulate a thrown HTTP-400-like object (our own bad request).
     (globalThis as Record<string, unknown>).__genai = async (key: string) => {
       calls.push({ key });
-      if (key === "k1") throw { status: 400, message: "bad request" };
+      if (key === "k1") throw { status: 400, message: "verbatim upstream secret" };
       return { text: "ok" };
     };
-    await expect(generateContent({} as never)).rejects.toMatchObject({
-      status: 400,
-    });
+    const err = await generateContent({} as never).catch((e) => e);
+    expect(err).toBeInstanceOf(GatewayError);
+    expect(err.retryable).toBe(false);
+    // Generic, client-safe message; raw upstream text only in `detail`.
+    expect(err.message).not.toMatch(/verbatim upstream secret/);
+    expect(err.detail).toMatch(/verbatim upstream secret/);
     expect(calls.map((c) => c.key)).toEqual(["k1"]);
   });
 
@@ -208,17 +210,22 @@ describe("ai-gateway.generateContent failover", () => {
     expect(calls.map((c) => c.key)).toEqual(["k2"]);
   });
 
-  it("throws an aggregate error when every key fails retryably", async () => {
+  it("throws a sanitized retryable GatewayError when every key fails retryably", async () => {
     process.env.GEMINI_API_KEY = "k1";
     process.env.GEMINI_API_KEY_2 = "k2";
-    const { generateContent } = await loadGateway();
+    const { generateContent, GatewayError } = await loadGateway();
     program({
       k1: () => new Error("quota exceeded"),
-      k2: () => new Error("rate limit"),
+      k2: () => new Error("rate limit SECRET-QUOTA-ID"),
     });
-    await expect(generateContent({} as never)).rejects.toThrow(
-      /All 2 Gemini key\(s\) failed/,
-    );
+    const err = await generateContent({} as never).catch((e) => e);
+    expect(err).toBeInstanceOf(GatewayError);
+    expect(err.retryable).toBe(true);
+    // Client-safe message must not leak upstream quota text...
+    expect(err.message).not.toMatch(/SECRET-QUOTA-ID|All 2 Gemini/);
+    // ...but the server-only detail keeps the last upstream error for logs.
+    expect(err.detail).toMatch(/All 2 Gemini key\(s\) failed/);
+    expect(err.detail).toMatch(/SECRET-QUOTA-ID/);
   });
 
   it("clears the cooldown and failure count after a key recovers", async () => {

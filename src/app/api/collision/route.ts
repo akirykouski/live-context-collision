@@ -1,4 +1,6 @@
 import { analyzeUtterance } from "@/lib/gemini";
+import { curateMemory } from "@/lib/memory-curator";
+import { aiErrorResponse } from "@/lib/api-error";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -30,12 +32,25 @@ export async function POST(req: Request) {
       text,
       recentTranscript: body.recentTranscript?.slice(-6),
     });
+
+    // Write-back loop: off the hot path. The card is already computed; the
+    // curator learns durable facts from this utterance so a *later* statement
+    // in the same meeting can collide against it. Fire-and-forget — the
+    // long-lived server keeps this promise alive after the response is sent,
+    // and a curation failure must never affect the collision response.
+    void curateMemory({
+      speaker: body.speaker || "Speaker",
+      text,
+      recentTranscript: body.recentTranscript?.slice(-6),
+    }).catch((err) =>
+      console.warn(
+        "[collision] memory curation failed:",
+        err instanceof Error ? err.message : err,
+      ),
+    );
+
     return NextResponse.json(result);
   } catch (err) {
-    console.error("collision analyze failed", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "engine error" },
-      { status: 500 },
-    );
+    return aiErrorResponse(err, "collision");
   }
 }

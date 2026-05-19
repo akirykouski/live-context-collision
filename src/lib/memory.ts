@@ -1,17 +1,25 @@
 import seed from "@/data/memory.json";
 import type { MemoryFact } from "./types";
+import { learnedFactsCache } from "./learned-facts";
 
 /**
- * The company memory graph. For the hackathon this is an in-memory store seeded
- * from JSON — the brief explicitly allows this. Swap the loader for Postgres /
- * a vector store without touching callers.
+ * The company memory graph. Seeded from JSON, plus facts the Memory Curator
+ * wrote back from the live meeting (decisions/commitments made in *this* call).
+ * Learned facts come from an in-process cache that {@link learnedFactsCache}
+ * keeps warm, so retrieval stays synchronous on the hot path.
  */
-const facts: MemoryFact[] = (seed.facts as MemoryFact[]).filter(
+const seedFacts: MemoryFact[] = (seed.facts as MemoryFact[]).filter(
   (f) => f.status !== "expired",
 );
 
+/** Seed graph + anything learned this meeting, expired facts excluded. */
+function pool(): MemoryFact[] {
+  const learned = learnedFactsCache().filter((f) => f.status !== "expired");
+  return learned.length > 0 ? [...seedFacts, ...learned] : seedFacts;
+}
+
 export function allFacts(): MemoryFact[] {
-  return facts;
+  return pool();
 }
 
 /**
@@ -23,6 +31,7 @@ export function retrieveRelevant(text: string, limit = 8): MemoryFact[] {
   const haystack = text.toLowerCase();
   const tokens = haystack.split(/[^a-z0-9]+/).filter((t) => t.length > 2);
 
+  const facts = pool();
   const scored = facts.map((fact) => {
     const terms = [
       fact.entity,

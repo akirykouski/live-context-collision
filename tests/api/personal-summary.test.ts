@@ -58,12 +58,31 @@ describe("POST /api/personal-summary", () => {
     expect(summarizeForPerson).toHaveBeenCalledOnce();
   });
 
-  it("maps engine failures to a 500", async () => {
-    summarizeForPerson.mockRejectedValueOnce(new Error("llm exploded"));
+  it("maps an unexpected engine failure to a sanitized 500 (no leak)", async () => {
+    summarizeForPerson.mockRejectedValueOnce(new Error("verbatim upstream secret"));
     const res = await POST(
       post(JSON.stringify({ personId: "valya", utterances })),
     );
     expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ error: "llm exploded" });
+    const body = await res.json();
+    expect(body).toEqual({ error: "Internal error processing the request." });
+    expect(JSON.stringify(body)).not.toMatch(/verbatim upstream secret/);
+  });
+
+  it("maps a transient GatewayError to a sanitized 503", async () => {
+    const { GatewayError } = await import("@/lib/ai-gateway");
+    summarizeForPerson.mockRejectedValueOnce(
+      new GatewayError({
+        retryable: true,
+        detail: "All 2 Gemini key(s) failed. RESOURCE_EXHAUSTED quotaId SECRET",
+      }),
+    );
+    const res = await POST(
+      post(JSON.stringify({ personId: "valya", utterances })),
+    );
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toMatch(/temporarily unavailable/i);
+    expect(JSON.stringify(body)).not.toMatch(/SECRET|quotaId|Gemini key/);
   });
 });

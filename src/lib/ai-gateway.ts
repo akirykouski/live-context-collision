@@ -21,6 +21,29 @@ import type {
 const MAX_KEYS = 4;
 const COOLDOWN_MS = 60_000;
 
+/**
+ * The only error type the gateway throws. `message` is deliberately generic
+ * and safe to surface to a client; the verbatim upstream text lives in
+ * `detail` for SERVER-SIDE logging only and must never be returned to a
+ * caller. `retryable` separates a transient upstream/capacity failure
+ * (client should back off → 503) from a malformed request (→ 500).
+ */
+export class GatewayError extends Error {
+  readonly retryable: boolean;
+  readonly detail: string;
+  constructor(opts: { retryable: boolean; detail: string; message?: string }) {
+    super(opts.message ?? "AI gateway request failed");
+    this.name = "GatewayError";
+    this.retryable = opts.retryable;
+    this.detail = opts.detail;
+  }
+}
+
+function errDetail(err: unknown): string {
+  const msg = (err as { message?: string })?.message;
+  return typeof msg === "string" && msg.length > 0 ? msg : String(err);
+}
+
 interface KeyState {
   key: string;
   label: string;
@@ -153,8 +176,14 @@ export async function generateContent(
     } catch (err) {
       lastErr = err;
       if (!isRetryable(err)) {
-        // Our request is broken — failing over wastes keys. Surface it.
-        throw err;
+        // Our request is broken — failing over just burns keys on the same
+        // bug. Surface it, but sanitized: a caller must never see raw
+        // upstream provider text.
+        throw new GatewayError({
+          retryable: false,
+          detail: errDetail(err),
+          message: "AI gateway: upstream rejected the request",
+        });
       }
       state.failures += 1;
       state.cooldownUntil = Date.now() + COOLDOWN_MS;
@@ -166,11 +195,11 @@ export async function generateContent(
     }
   }
 
-  throw new Error(
-    `All ${states.length} Gemini key(s) failed. Last error: ${
-      (lastErr as { message?: string })?.message ?? String(lastErr)
-    }`,
-  );
+  throw new GatewayError({
+    retryable: true,
+    detail: `All ${states.length} Gemini key(s) failed. Last error: ${errDetail(lastErr)}`,
+    message: "AI gateway: all keys are temporarily unavailable",
+  });
 }
 
 /** Internal helpers exposed for unit testing only. Not part of the public API. */

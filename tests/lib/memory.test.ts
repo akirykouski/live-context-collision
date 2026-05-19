@@ -9,8 +9,10 @@ describe("memory.allFacts", () => {
     expect(facts.map((f) => f.id)).toContain("legal-featurex");
   });
 
-  it("returns a stable reference (in-memory store)", () => {
-    expect(allFacts()).toBe(allFacts());
+  it("returns the same set across calls when nothing was learned", () => {
+    // The graph is now seed + facts learned this meeting; with an empty
+    // learned cache (no Valkey/file in tests) it is the stable seed set.
+    expect(allFacts().map((f) => f.id)).toEqual(allFacts().map((f) => f.id));
   });
 });
 

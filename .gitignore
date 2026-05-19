@@ -12,5 +12,8 @@
 *.tsbuildinfo
 next-env.d.ts
 
-# test coverage output
+# test coverage / e2e artifacts
 /coverage
+/test-results
+/playwright-report
+/e2e-results.json

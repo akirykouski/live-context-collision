@@ -171,6 +171,57 @@ export interface SummarizeArgs {
   cards: CollisionCard[];
 }
 
+function isEmptySummary(s: Omit<PersonalSummary, "person">): boolean {
+  return (
+    s.bottomLine.trim().length === 0 &&
+    s.actionItems.length === 0 &&
+    s.decisionsAffectingYou.length === 0 &&
+    s.flagsRaised.length === 0 &&
+    s.openQuestions.length === 0
+  );
+}
+
+/**
+ * Last-resort summary built only from data we already hold for certain — the
+ * person's owned memory facts and the collision cards that cite them. No model
+ * call, no invention: every line is traceable to a fact id or a fired card.
+ * A short grounded note beats a blank panel for the person this meeting hit.
+ */
+function deterministicSummary(
+  args: SummarizeArgs,
+  relevantFacts: MemoryFact[],
+): Omit<PersonalSummary, "person"> {
+  const owned = new Set(args.person.ownedFactIds);
+  const yourCards = args.cards.filter((c) =>
+    (c.factIds ?? []).some((id) => owned.has(id)),
+  );
+
+  const flagsRaised = yourCards.map((c) => ({
+    collisionType: c.collisionType,
+    headline: c.headline,
+    severity: c.severity,
+    relevance: "You own the memory fact this collision is grounded in.",
+  }));
+
+  let bottomLine: string;
+  if (yourCards.length > 0) {
+    bottomLine = `${yourCards[0].headline} You own the fact behind this — follow up before it ships.`;
+  } else if (relevantFacts.length > 0) {
+    bottomLine = `This meeting touched ${relevantFacts.length} memory fact(s) you own. Most relevant: ${relevantFacts[0].statement}`;
+  } else {
+    bottomLine =
+      "Nothing in this meeting was specific to you based on the facts you own.";
+  }
+
+  return {
+    bottomLine,
+    actionItems: [],
+    decisionsAffectingYou: [],
+    flagsRaised,
+    openQuestions: [],
+  };
+}
+
 export async function summarizeForPerson(
   args: SummarizeArgs,
 ): Promise<PersonalSummaryResult> {
@@ -203,54 +254,53 @@ export async function summarizeForPerson(
     2,
   );
 
-  const { response: res } = await generateContent({
-    model: MODEL,
-    contents: prompt,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      responseSchema,
-      temperature: 0.3,
-      // Slightly larger budget than the live collision call — this is a
-      // structured summary, not a single card.
-      maxOutputTokens: 2000,
-    },
-  });
-
-  const raw = res.text;
-  const empty: PersonalSummary = {
-    person: {
-      id: args.person.id,
-      name: args.person.name,
-      role: args.person.role,
-    },
-    bottomLine: "",
-    actionItems: [],
-    decisionsAffectingYou: [],
-    flagsRaised: [],
-    openQuestions: [],
+  const person = {
+    id: args.person.id,
+    name: args.person.name,
+    role: args.person.role,
   };
-  if (!raw) return { summary: empty };
 
-  let parsed: Omit<PersonalSummary, "person">;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return { summary: empty };
-  }
-
-  return {
-    summary: {
-      person: {
-        id: args.person.id,
-        name: args.person.name,
-        role: args.person.role,
+  const attempt = async (): Promise<Omit<PersonalSummary, "person"> | null> => {
+    const { response: res } = await generateContent({
+      model: MODEL,
+      contents: prompt,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        responseMimeType: "application/json",
+        responseSchema,
+        temperature: 0.3,
+        // Slightly larger budget than the live collision call — this is a
+        // structured summary, not a single card.
+        maxOutputTokens: 2000,
       },
+    });
+    const raw = res.text;
+    if (!raw) return null;
+    let parsed: Omit<PersonalSummary, "person">;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+    const normalized: Omit<PersonalSummary, "person"> = {
       bottomLine: parsed.bottomLine ?? "",
       actionItems: parsed.actionItems ?? [],
       decisionsAffectingYou: parsed.decisionsAffectingYou ?? [],
       flagsRaised: parsed.flagsRaised ?? [],
       openQuestions: parsed.openQuestions ?? [],
-    },
+    };
+    // A structurally-valid but entirely empty draft is the observed failure
+    // mode: the model returns nothing for the person the meeting most
+    // affects. Treat that as "no usable output" so we retry / ground it.
+    return isEmptySummary(normalized) ? null : normalized;
   };
+
+  // The model is non-deterministic; an empty draft for a clearly-affected
+  // person is often non-empty on a second draw. Retry once, then fall back
+  // to a deterministic, strictly-grounded summary so the person who needed
+  // this most never gets a blank panel.
+  const draft = (await attempt()) ?? (await attempt());
+  const body = draft ?? deterministicSummary(args, relevantFacts);
+
+  return { summary: { person, ...body } };
 }

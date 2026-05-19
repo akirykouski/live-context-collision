@@ -1,6 +1,7 @@
 import { summarizeForPerson } from "@/lib/personal-summary";
 import type { CollisionCard, Person, Utterance } from "@/lib/types";
 import people from "@/data/people.json";
+import { aiErrorResponse } from "@/lib/api-error";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -52,10 +53,6 @@ export async function POST(req: Request) {
     const result = await summarizeForPerson({ person, utterances, cards });
     return NextResponse.json(result);
   } catch (err) {
-    console.error("personal-summary failed", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "engine error" },
-      { status: 500 },
-    );
+    return aiErrorResponse(err, "personal-summary");
   }
 }

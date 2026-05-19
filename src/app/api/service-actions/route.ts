@@ -6,6 +6,7 @@ import {
   serviceQueueEnabled,
 } from "@/lib/queue";
 import { getJobSnapshot, setJobSnapshot } from "@/lib/runtime-store";
+import { aiErrorResponse } from "@/lib/api-error";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -74,10 +75,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json(result);
   } catch (err) {
-    console.error("service-actions failed", err);
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "service action error" },
-      { status: 500 },
-    );
+    return aiErrorResponse(err, "service-actions");
   }
 }

@@ -57,10 +57,29 @@ describe("POST /api/service-actions", () => {
     expect(appendServiceActions).not.toHaveBeenCalled();
   });
 
-  it("maps engine failures to a 500", async () => {
-    analyzeServiceActions.mockRejectedValueOnce(new Error("router down"));
+  it("maps an unexpected engine failure to a sanitized 500 (no leak)", async () => {
+    analyzeServiceActions.mockRejectedValueOnce(
+      new Error("verbatim upstream secret"),
+    );
     const res = await POST(post(JSON.stringify({ text: "do it" })));
     expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ error: "router down" });
+    const body = await res.json();
+    expect(body).toEqual({ error: "Internal error processing the request." });
+    expect(JSON.stringify(body)).not.toMatch(/verbatim upstream secret/);
+  });
+
+  it("maps a transient GatewayError to a sanitized 503", async () => {
+    const { GatewayError } = await import("@/lib/ai-gateway");
+    analyzeServiceActions.mockRejectedValueOnce(
+      new GatewayError({
+        retryable: true,
+        detail: "All 1 Gemini key(s) failed. quota SECRET",
+      }),
+    );
+    const res = await POST(post(JSON.stringify({ text: "do it" })));
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toMatch(/temporarily unavailable/i);
+    expect(JSON.stringify(body)).not.toMatch(/SECRET|Gemini key/);
   });
 });

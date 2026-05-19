@@ -56,10 +56,28 @@ describe("POST /api/collision", () => {
     expect(analyzeUtterance.mock.calls[0][0].speaker).toBe("Speaker");
   });
 
-  it("maps engine failures to a 500", async () => {
-    analyzeUtterance.mockRejectedValueOnce(new Error("gemini down"));
+  it("maps an unexpected engine failure to a sanitized 500 (no leak)", async () => {
+    analyzeUtterance.mockRejectedValueOnce(new Error("verbatim upstream secret"));
     const res = await POST(post(JSON.stringify({ text: "boom" })));
     expect(res.status).toBe(500);
-    expect(await res.json()).toEqual({ error: "gemini down" });
+    const body = await res.json();
+    expect(body).toEqual({ error: "Internal error processing the request." });
+    expect(JSON.stringify(body)).not.toMatch(/verbatim upstream secret/);
+  });
+
+  it("maps a transient GatewayError to a 503 with Retry-After", async () => {
+    const { GatewayError } = await import("@/lib/ai-gateway");
+    analyzeUtterance.mockRejectedValueOnce(
+      new GatewayError({
+        retryable: true,
+        detail: "All 2 Gemini key(s) failed. quota SECRET",
+      }),
+    );
+    const res = await POST(post(JSON.stringify({ text: "boom" })));
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Retry-After")).toBe("15");
+    const body = await res.json();
+    expect(body.error).toMatch(/temporarily unavailable/i);
+    expect(JSON.stringify(body)).not.toMatch(/SECRET|Gemini key/);
   });
 });

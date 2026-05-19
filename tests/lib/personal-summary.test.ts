@@ -42,7 +42,7 @@ beforeEach(() => generateContent.mockReset());
 describe("personal-summary.summarizeForPerson", () => {
   it("scopes memory facts to the person's owned + card-referenced facts", async () => {
     reply({
-      bottomLine: "",
+      bottomLine: "You picked up a 4th P0.",
       actionItems: [],
       decisionsAffectingYou: [],
       flagsRaised: [],
@@ -55,27 +55,60 @@ describe("personal-summary.summarizeForPerson", () => {
     expect(prompt).not.toContain("decision-acme-export"); // unrelated
   });
 
-  it("returns a structured empty summary when the model yields no text", async () => {
-    generateContent.mockResolvedValueOnce({
-      response: { text: "" },
-      servedBy: "T",
-    });
+  it("retries once when the model yields no text", async () => {
+    generateContent
+      .mockResolvedValueOnce({ response: { text: "" }, servedBy: "T" })
+      .mockResolvedValueOnce({
+        response: {
+          text: JSON.stringify({
+            bottomLine: "Second draw worked.",
+            actionItems: [],
+            decisionsAffectingYou: [],
+            flagsRaised: [],
+            openQuestions: [],
+          }),
+        },
+        servedBy: "T",
+      });
     const { summary } = await summarizeForPerson({
       person,
       utterances,
       cards: [],
     });
+    expect(generateContent).toHaveBeenCalledTimes(2);
+    expect(summary.bottomLine).toBe("Second draw worked.");
+  });
+
+  it("never returns a blank summary for an affected person — deterministic grounded fallback", async () => {
+    // Both attempts produce nothing usable (the observed Valya failure mode).
+    generateContent.mockResolvedValue({
+      response: { text: "" },
+      servedBy: "T",
+    });
+    const valyaCard = { ...card, factIds: ["capacity-valya"] };
+    const { summary } = await summarizeForPerson({
+      person,
+      utterances,
+      cards: [valyaCard],
+    });
+    expect(generateContent).toHaveBeenCalledTimes(2); // tried, then grounded
     expect(summary.person).toEqual({
       id: "valya",
       name: "Valya",
       role: "Engineering IC",
     });
-    expect(summary.bottomLine).toBe("");
+    // Not blank: grounded strictly in the card that cites a fact she owns.
+    expect(summary.bottomLine.length).toBeGreaterThan(0);
+    expect(summary.flagsRaised).toHaveLength(1);
+    expect(summary.flagsRaised[0].headline).toBe(card.headline);
+    expect(summary.flagsRaised[0].relevance).toMatch(/own the memory fact/i);
+    // Nothing invented for sections we cannot ground without the model.
     expect(summary.actionItems).toEqual([]);
+    expect(summary.decisionsAffectingYou).toEqual([]);
   });
 
-  it("falls back to an empty summary on malformed JSON", async () => {
-    generateContent.mockResolvedValueOnce({
+  it("grounds the fallback in owned facts when no card cites them", async () => {
+    generateContent.mockResolvedValue({
       response: { text: "}{ not json" },
       servedBy: "T",
     });
@@ -84,8 +117,9 @@ describe("personal-summary.summarizeForPerson", () => {
       utterances,
       cards: [],
     });
-    expect(summary.bottomLine).toBe("");
     expect(summary.flagsRaised).toEqual([]);
+    // Falls to the owned-fact statement, never an empty bottom line.
+    expect(summary.bottomLine).toMatch(/memory fact\(s\) you own/i);
   });
 
   it("maps a well-formed summary and stamps the person", async () => {
