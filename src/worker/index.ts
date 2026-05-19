@@ -5,6 +5,7 @@ import {
   serviceQueueEnabled,
 } from "../lib/queue";
 import { setJobSnapshot } from "../lib/runtime-store";
+import { assertResidency } from "../lib/residency";
 import type { ServiceActionJobData } from "../lib/types";
 import { getValkey } from "../lib/valkey";
 import { appendServiceActions, getWorkContext } from "../lib/work-context";
@@ -13,6 +14,13 @@ if (!serviceQueueEnabled()) {
   console.error("[worker] VALKEY_URL is required to run the worker.");
   process.exit(1);
 }
+
+// Refuse to process jobs if this instance would persist data outside the zone
+// it serves (no-op unless WORKGRAPH_RESIDENCY_STRICT=true).
+const residency = assertResidency();
+console.log(
+  `[worker] residency zone=${residency.activeZone} data=${residency.dataZone} consistent=${residency.consistent}`,
+);
 
 const worker = new Worker<ServiceActionJobData>(
   SERVICE_ACTION_QUEUE,

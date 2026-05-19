@@ -248,4 +248,20 @@ export interface DeploymentInfo {
   modules: string[];
   valkeyConfigured: boolean;
   timestamp: string;
+  /** Data-residency posture of this instance + this request. */
+  residency: {
+    /** Zone this instance serves. */
+    activeZone: string;
+    /** Zone its data store lives in. */
+    dataZone: string;
+    /** activeZone === dataZone (false = cross-border storage risk). */
+    consistent: boolean;
+    /** Inconsistency refuses to start when true. */
+    strict: boolean;
+    zones: { id: string; label: string; countries: number; default: boolean }[];
+    /** Country of *this* request, from the Cloudflare edge (if present). */
+    requestCountry: string | null;
+    /** Whether the edge steered this request to the correct zone. */
+    routedCorrectly: boolean;
+  };
 }
