@@ -1,6 +1,6 @@
 import { retrieveRelevant } from "./memory";
 import { hydrateLearnedFacts } from "./learned-facts";
-import { SPECIALISTS, runSpecialist } from "./collision/specialists";
+import { SPECIALISTS, runSpecialist, hotFactsFor } from "./collision/specialists";
 import { verifyCard } from "./collision/verifier";
 import type { CollisionCard, CollisionResult, MemoryFact } from "./types";
 
@@ -147,6 +147,13 @@ export interface AnalyzeArgs {
   text: string;
   /** Recent meeting context so pronoun/topic references resolve. */
   recentTranscript?: { speaker: string; text: string }[];
+  /**
+   * Optional meeting id. When the Pre-Warmer has loaded this meeting's facts
+   * into Valkey, the candidate pool is read straight from the hot key instead
+   * of the cold graph — a drop-in that removes the cold-start retrieval from
+   * the hot path. Absent / not-yet-prewarmed → unchanged cold behavior.
+   */
+  meetingId?: string;
 }
 
 function dedupeRankCap(
@@ -190,7 +197,13 @@ export async function analyzeUtterance(
     args.recentTranscript?.map((u) => u.text).join(" ") ?? "",
     args.text,
   ].join(" ");
-  const relevant = retrieveRelevant(contextText);
+
+  // Hot-key first: if the Pre-Warmer staged this meeting's ranked facts, use
+  // them directly (they are the meeting-relevant subset the graph query would
+  // have returned). On any miss — no meetingId, no Valkey, not prewarmed yet,
+  // store hiccup — fall back to the cold lexical retrieval. Never regresses.
+  const hot = await hotFactsFor(args.meetingId);
+  const relevant = hot ?? retrieveRelevant(contextText);
 
   // Only spend a judge on a domain that actually has relevant facts; if the
   // lexical pre-filter found nothing typed, let every judge have a look.
