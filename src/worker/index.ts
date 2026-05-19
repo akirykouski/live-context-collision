@@ -9,6 +9,7 @@ import { assertResidency } from "../lib/residency";
 import type { ServiceActionJobData } from "../lib/types";
 import { getValkey } from "../lib/valkey";
 import { appendServiceActions, getWorkContext } from "../lib/work-context";
+import { dispatchActionsToNotion } from "../lib/integrations/notion";
 
 if (!serviceQueueEnabled()) {
   console.error("[worker] VALKEY_URL is required to run the worker.");
@@ -44,6 +45,7 @@ const worker = new Worker<ServiceActionJobData>(
     });
 
     if (result.actions.length > 0) {
+      result.actions = await dispatchActionsToNotion(result.actions);
       await appendServiceActions(result.actions);
     }
 
