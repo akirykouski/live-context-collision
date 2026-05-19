@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSpeechmatics } from "@/hooks/useSpeechmatics";
+import { useSpeechmatics, type AudioSource } from "@/hooks/useSpeechmatics";
 import seed from "@/data/memory.json";
 import peopleSeed from "@/data/people.json";
 import type {
@@ -263,6 +263,7 @@ export default function Page() {
     [analyze, analyzeServiceAction],
   );
 
+  const [audioSource, setAudioSource] = useState<AudioSource>("mic");
   const { status, partial, error, start, stop } = useSpeechmatics(onUtterance);
   const listening = status === "listening" || status === "connecting";
 
@@ -345,10 +346,36 @@ export default function Page() {
           <span className="sub">Decision Safety Layer</span>
         </div>
 
+        <div className="view-switch" aria-label="Audio source">
+          <button
+            data-active={audioSource === "mic"}
+            disabled={listening}
+            onClick={() => setAudioSource("mic")}
+            title="Microphone only"
+          >
+            Mic
+          </button>
+          <button
+            data-active={audioSource === "mic+tab"}
+            disabled={listening}
+            onClick={() => setAudioSource("mic+tab")}
+            title="Mic + shared browser tab audio (Google Meet, etc.)"
+          >
+            Mic + Tab
+          </button>
+        </div>
+
         <button
           className="mic-btn"
           data-on={listening}
-          onClick={() => (listening ? handleStop() : start())}
+          onClick={() =>
+            listening ? handleStop() : start({ source: audioSource })
+          }
+          title={
+            audioSource === "mic+tab"
+              ? "On the next prompt: pick your Meet tab and tick 'Share tab audio'"
+              : undefined
+          }
         >
           {status === "connecting"
             ? "Connecting…"
