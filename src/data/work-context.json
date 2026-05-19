@@ -12,6 +12,8 @@
       "urlLabel": "GH-42",
       "body": "SSO launch is blocked until Auth Refactor is complete. Current owner is Valya; target cannot be earlier than next Wednesday.",
       "updatedAt": "2026-05-14T15:20:00.000Z",
+      "notionPageId": "365c5da6-2862-812f-a767-c4700c9dd7db",
+      "notionUrl": "https://www.notion.so/365c5da62862812fa767c4700c9dd7db",
       "metadata": {
         "repo": "platform/auth",
         "labels": ["sso", "auth-refactor", "launch-blocker"]
@@ -29,6 +31,8 @@
       "urlLabel": "GH-51",
       "body": "Follow-up cleanup for SSO dependency handling once Auth Refactor lands.",
       "updatedAt": "2026-05-15T09:30:00.000Z",
+      "notionPageId": "365c5da6-2862-81f6-a2c2-caef51b23724",
+      "notionUrl": "https://www.notion.so/365c5da6286281f6a2c2caef51b23724",
       "metadata": {
         "repo": "platform/auth",
         "labels": ["sso", "cleanup"]
@@ -46,6 +50,8 @@
       "urlLabel": "ACME-17",
       "body": "Coordinate Acme launch plan, customer messaging, and release readiness across Product, Legal, and Platform.",
       "updatedAt": "2026-05-15T12:15:00.000Z",
+      "notionPageId": "365c5da6-2862-8172-b6e9-c9c4e0bc5879",
+      "notionUrl": "https://www.notion.so/365c5da628628172b6e9c9c4e0bc5879",
       "metadata": {
         "board": "Customer Launches",
         "linkedFacts": ["commitment-acme", "legal-featurex"]
@@ -63,6 +69,8 @@
       "urlLabel": "DEC-Feature-X",
       "body": "Legal review blocked Feature X until DPA update is approved. Product and Sales must not promise a Friday launch.",
       "updatedAt": "2026-05-12T17:00:00.000Z",
+      "notionPageId": "365c5da6-2862-81a2-92c7-d63036b8a1b0",
+      "notionUrl": "https://www.notion.so/365c5da6286281a292c7d63036b8a1b0",
       "metadata": {
         "workspace": "Product Ops",
         "linkedFacts": ["legal-featurex"]
@@ -78,6 +86,8 @@
       "urlLabel": "Gmail: Acme renewal",
       "body": "Acme asked whether the team can commit to a Friday launch window. Sales has not yet sent a revised promise.",
       "updatedAt": "2026-05-16T10:05:00.000Z",
+      "notionPageId": "365c5da6-2862-8192-863f-f6f515a0b053",
+      "notionUrl": "https://www.notion.so/365c5da628628192863ff6f515a0b053",
       "metadata": {
         "from": "alex@company.test",
         "to": "acme-procurement@example.com"
@@ -93,6 +103,8 @@
       "urlLabel": "Gmail: DPA review",
       "body": "Legal confirmed Feature X cannot proceed until the DPA update is approved.",
       "updatedAt": "2026-05-12T18:30:00.000Z",
+      "notionPageId": "365c5da6-2862-8198-a39f-d9b8a7a578c3",
+      "notionUrl": "https://www.notion.so/365c5da628628198a39fd9b8a7a578c3",
       "metadata": {
         "from": "mira@company.test",
         "to": "product-leads@company.test"
