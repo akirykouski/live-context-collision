@@ -1,0 +1,30 @@
+# Cloudflare Worker — WorkGraph AI edge geo-router.
+#
+# Deploy:  cd deploy/cloudflare && npx wrangler deploy
+# Bind your domain to this Worker (Workers Routes), then point each zone's
+# `origin` at the regional Vultr Load Balancer DNS name you provisioned.
+
+name = "workgraph-residency-router"
+main = "worker.mjs"
+compatibility_date = "2024-11-01"
+
+# Zone topology. `id`/`countries` MUST match the app's
+# WORKGRAPH_RESIDENCY_ZONES; `origin` is the regional Vultr LB hostname.
+# Store as a single JSON string (Worker plain-text var). For production move
+# this to an encrypted secret or KV if it changes often.
+[vars]
+RESIDENCY_ZONES = """
+[
+  {
+    "id": "eu",
+    "origin": "eu-lb.workgraph.example",
+    "default": true,
+    "countries": ["AT","BE","BG","HR","CY","CZ","DK","EE","FI","FR","DE","GR","HU","IE","IT","LV","LT","LU","MT","NL","PL","PT","RO","SK","SI","ES","SE","IS","LI","NO"]
+  },
+  {
+    "id": "us",
+    "origin": "us-lb.workgraph.example",
+    "countries": ["US","PR","GU","VI","AS","MP"]
+  }
+]
+"""

@@ -89,15 +89,60 @@ DB without touching callers.
 
 ## Deploy (Vultr)
 
+Single process (dev / minimal demo):
+
 ```bash
 npm run build && npm start    # binds $PORT (default 3000)
 ```
 
-Behind a TLS-terminating proxy — mic capture requires `https://` (or
-`localhost`).
+### Multi-region runtime with data residency
+
+```text
+visitor
+  -> Cloudflare Worker            geo-routes by request.cf.country
+  -> Vultr Load Balancer (per zone, managed)   balances + /api/health
+  -> N Vultr Compute instances    each runs docker-compose.vultr.yml
+       app (Next.js) + worker (BullMQ)
+  -> Vultr Managed Valkey (per zone)            data never leaves the zone
+```
+
+A *zone* is a legal/geographic region. A user's traffic — and therefore
+their data — stays in their zone, so EU users are served from and stored in
+the EU. Zones are config-driven (`WORKGRAPH_RESIDENCY_ZONES`), so adding APAC
+etc. needs no code change.
+
+- **Edge geo-routing** — `deploy/cloudflare/worker.mjs` reads
+  `request.cf.country`, maps it to a zone, and proxies to that zone's Vultr
+  Load Balancer. Deploy with `cd deploy/cloudflare && npx wrangler deploy`;
+  set each zone's `origin` to its Vultr LB hostname and keep zone ids in sync
+  with the app's `WORKGRAPH_RESIDENCY_ZONES`.
+- **Per zone**: a managed Vultr Load Balancer fronts the Compute instances and
+  health-checks `/api/health`; a Vultr Managed Valkey holds that zone's state.
+  Deploy the stack per Compute instance:
+
+  ```bash
+  WORKGRAPH_ZONE=eu WORKGRAPH_DATA_ZONE=eu sh scripts/deploy-vultr.sh
+  ```
+
+- **App-side enforcement (defense in depth)** — the app does not blindly trust
+  the edge. `/api/deployment` reports `residency`: it re-derives the expected
+  zone from `CF-IPCountry`/`X-WG-Country` and flags `routedCorrectly: false`
+  if a request reached the wrong region, and `consistent: false` if this
+  instance's data store is not in the zone it serves. With
+  `WORKGRAPH_RESIDENCY_STRICT=true` a cross-zone data store **refuses to
+  start** rather than store data in the wrong jurisdiction. The Runtime panel
+  surfaces all of this live.
+
+This is not a claim of full GDPR / EU AI Act compliance — it is an auditable
+architecture built around the relevant principle: regional users are served
+and stored regionally, and the system verifies (not assumes) it.
+
+Mic capture requires `https://` (or `localhost`); terminate TLS at Cloudflare
+and/or the Vultr Load Balancer.
 
 ## Sponsor track mapping
 
 - **Speechmatics** — live multi-speaker transcription drives the whole loop.
 - **Gemini** — interprets statements and produces concise, source-backed cards.
-- **Vultr** — single Next.js app, one `npm start`, production-looking demo.
+- **Vultr** — per-zone Load Balancer + Compute + Managed Valkey behind a
+  Cloudflare geo-router, giving verifiable EU data residency.

@@ -748,8 +748,28 @@ function RuntimePanel({
           <b>{deployment?.transcriptTtl ?? "24h"}</b>
         </div>
         <div>
-          <span>Load balancer</span>
-          <b>{deployment?.loadBalancer ? "enabled" : "ready"}</b>
+          <span>Edge routing</span>
+          <b>{deployment?.loadBalancer ? "Cloudflare → Vultr LB" : "direct"}</b>
+        </div>
+        <div>
+          <span>Data residency</span>
+          <b>
+            {deployment?.residency
+              ? `${deployment.residency.activeZone} · ${
+                  deployment.residency.consistent ? "in-zone" : "VIOLATION"
+                }`
+              : "—"}
+          </b>
+        </div>
+        <div>
+          <span>This request</span>
+          <b>
+            {deployment?.residency
+              ? `${deployment.residency.requestCountry ?? "?"} · ${
+                  deployment.residency.routedCorrectly ? "routed ✓" : "misrouted ✗"
+                }`
+              : "—"}
+          </b>
         </div>
       </div>
     </section>

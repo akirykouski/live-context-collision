@@ -1,3 +1,29 @@
+# Per-region Vultr Compute stack.
+#
+# Topology (provisioned in Vultr + Cloudflare, see deploy/cloudflare/ + README):
+#
+#   visitor
+#     -> Cloudflare Worker  (geo-routes by request.cf.country)
+#     -> Vultr Load Balancer  (managed; one per residency zone)
+#     -> N Vultr Compute instances, each running THIS stack:
+#          app   (Next.js)  + worker (BullMQ)
+#     -> Vultr Managed Valkey  (one per zone — data stays in-zone)
+#
+# Deploy this file once per Compute instance in a zone. The managed Vultr LB
+# balances across those instances and runs the /api/health check; there is no
+# self-hosted reverse proxy in this stack.
+# Set WORKGRAPH_ZONE / WORKGRAPH_DATA_ZONE per zone so the app can verify and
+# enforce data residency.
+
+x-residency: &residency
+  WORKGRAPH_RUNTIME: ${WORKGRAPH_RUNTIME:-Vultr Cloud Compute}
+  WORKGRAPH_REGION: ${WORKGRAPH_REGION:-EU}
+  WORKGRAPH_QUEUE: ${WORKGRAPH_QUEUE:-Vultr Managed Valkey}
+  WORKGRAPH_ZONE: ${WORKGRAPH_ZONE:-eu}
+  WORKGRAPH_DATA_ZONE: ${WORKGRAPH_DATA_ZONE:-eu}
+  WORKGRAPH_RESIDENCY_ZONES: ${WORKGRAPH_RESIDENCY_ZONES:-}
+  WORKGRAPH_RESIDENCY_STRICT: ${WORKGRAPH_RESIDENCY_STRICT:-true}
+
 services:
   app:
     build:
@@ -7,13 +33,23 @@ services:
     env_file:
       - .env.production
     environment:
+      <<: *residency
       PORT: 3000
-      WORKGRAPH_RUNTIME: ${WORKGRAPH_RUNTIME:-Vultr Cloud Compute}
-      WORKGRAPH_REGION: ${WORKGRAPH_REGION:-EU}
-      WORKGRAPH_QUEUE: ${WORKGRAPH_QUEUE:-Vultr Managed Valkey}
-      WORKGRAPH_LOAD_BALANCER: ${WORKGRAPH_LOAD_BALANCER:-true}
+      # A managed Vultr Load Balancer fronts these instances.
+      WORKGRAPH_LOAD_BALANCER: "true"
     ports:
+      # Bound to the host; the Vultr LB targets this port across instances.
       - "3000:3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
   worker:
@@ -24,7 +60,5 @@ services:
     env_file:
       - .env.production
     environment:
-      WORKGRAPH_RUNTIME: ${WORKGRAPH_RUNTIME:-Vultr Cloud Compute}
-      WORKGRAPH_REGION: ${WORKGRAPH_REGION:-EU}
-      WORKGRAPH_QUEUE: ${WORKGRAPH_QUEUE:-Vultr Managed Valkey}
+      <<: *residency
     restart: unless-stopped
