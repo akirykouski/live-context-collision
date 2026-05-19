@@ -7,6 +7,7 @@ import {
 } from "@/lib/queue";
 import { getJobSnapshot, setJobSnapshot } from "@/lib/runtime-store";
 import { aiErrorResponse } from "@/lib/api-error";
+import { dispatchActionsToNotion } from "@/lib/integrations/notion";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -70,6 +71,9 @@ export async function POST(req: Request) {
     });
 
     if (result.actions.length > 0) {
+      // Push eligible actions to Notion (urlLabel/metadata get patched if it
+      // succeeds) before we persist, so the Action Center shows live links.
+      result.actions = await dispatchActionsToNotion(result.actions);
       await appendServiceActions(result.actions);
     }
 

@@ -1,13 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { analyzeServiceActions, getWorkContext, appendServiceActions } =
-  vi.hoisted(() => ({
-    analyzeServiceActions: vi.fn(),
-    getWorkContext: vi.fn(),
-    appendServiceActions: vi.fn(),
-  }));
+const {
+  analyzeServiceActions,
+  getWorkContext,
+  appendServiceActions,
+  dispatchActionsToNotion,
+} = vi.hoisted(() => ({
+  analyzeServiceActions: vi.fn(),
+  getWorkContext: vi.fn(),
+  appendServiceActions: vi.fn(),
+  // Pass actions through untouched — the real dispatcher does live Notion
+  // I/O which is out of scope for the route's contract tests.
+  dispatchActionsToNotion: vi.fn(async (actions: unknown) => actions),
+}));
 vi.mock("@/lib/service-actions", () => ({ analyzeServiceActions }));
 vi.mock("@/lib/work-context", () => ({ getWorkContext, appendServiceActions }));
+vi.mock("@/lib/integrations/notion", () => ({ dispatchActionsToNotion }));
 
 import { POST } from "@/app/api/service-actions/route";
 
