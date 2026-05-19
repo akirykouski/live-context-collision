@@ -265,3 +265,49 @@ export interface DeploymentInfo {
     routedCorrectly: boolean;
   };
 }
+
+// ─────────────────────────── transcript / prewarm seam ───────────────────────
+//
+// The cross-feature integration contract. Feature 1 (Transcript Enhancer)
+// and Feature 2 (Pre-Warmer) are built independently but meet here:
+//   - the Pre-Warmer writes the per-meeting vocab + hot facts to Valkey;
+//   - the Transcript Enhancer's Layer 1 reads the vocab to seed Speechmatics;
+//   - the collision specialists read the hot facts as a drop-in for the graph.
+// Both sides import these names so the on-the-wire shapes never drift.
+
+/**
+ * One Speechmatics `additional_vocab` entry. `content` is the surface form to
+ * bias recognition toward; `sounds_like` are optional phonetic hints. This is
+ * exactly the shape Speechmatics' transcription_config.additional_vocab wants,
+ * so it is passed through to the browser untransformed.
+ */
+export interface AdditionalVocabEntry {
+  content: string;
+  sounds_like?: string[];
+}
+
+/**
+ * The immutable raw transcript primitive. Maps 1:1 to {@link Utterance} (the
+ * existing live shape) — declared here so the Transcript Enhancer can
+ * reference "what was said" by id without depending on collision types.
+ */
+export interface RawUtterance {
+  id: string;
+  meetingId: string;
+  speakerId: string;
+  startMs: number;
+  endMs: number;
+  text: string; // verbatim; immutable
+}
+
+/** Valkey key helpers — the only place these key formats are defined. */
+export const prewarmKeys = {
+  /** Ranked MemoryFact[] the collision specialists consume directly. */
+  hot: (meetingId: string) => `prewarm:meeting:${meetingId}:hot`,
+  /** AdditionalVocabEntry[] for Layer 1 dictionary injection. */
+  vocab: (meetingId: string) => `prewarm:meeting:${meetingId}:vocab`,
+  /** Auditable per-job manifest (sources touched, facts + scores). */
+  manifest: (meetingId: string) => `prewarm:meeting:${meetingId}:manifest`,
+  /** Idempotency / "already prewarmed" marker. */
+  marker: (meetingId: string) => `prewarm:meeting:${meetingId}:done`,
+} as const;

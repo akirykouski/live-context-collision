@@ -1,8 +1,50 @@
 import { Type } from "@google/genai";
 import { generateContent } from "../ai-gateway";
+import { getValkey, hasValkey } from "../valkey";
+import { prewarmKeys } from "../types";
 import type { CollisionCard, CollisionType, MemoryFact } from "../types";
 
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+
+/**
+ * Pre-Warmer integration seam (additive, safe, pure no-op without a meeting).
+ *
+ * The Pre-Warmer writes the ranked, meeting-relevant MemoryFact[] to
+ * prewarmKeys.hot(meetingId) as a TRUE drop-in for what retrieveRelevant()
+ * returns. The collision orchestrator calls {@link hotFactsFor} first and
+ * falls back to the cold graph on a miss — the hot path never regresses.
+ *
+ * The integrator wires this into gemini.ts; this module only exposes the
+ * helper + hit/miss counter. Never throws: any error → null (cold fallback).
+ */
+export const prewarmHitStats = { hits: 0, misses: 0 };
+
+export async function hotFactsFor(
+  meetingId?: string,
+): Promise<MemoryFact[] | null> {
+  // Pure no-op when there is no meeting context or no store.
+  if (!meetingId || !hasValkey()) {
+    return null;
+  }
+  try {
+    const raw = await getValkey().get(prewarmKeys.hot(meetingId));
+    if (!raw) {
+      prewarmHitStats.misses++;
+      return null;
+    }
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) {
+      prewarmHitStats.misses++;
+      return null;
+    }
+    prewarmHitStats.hits++;
+    return parsed as MemoryFact[];
+  } catch {
+    // Malformed JSON / store hiccup must never break collision detection.
+    prewarmHitStats.misses++;
+    return null;
+  }
+}
 
 /**
  * The brief defines six agent roles. Instead of one fused prompt that has to

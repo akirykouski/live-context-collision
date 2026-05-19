@@ -1,0 +1,53 @@
+{
+  "meetings": [
+    {
+      "id": "acme-launch-sync",
+      "title": "Acme launch readiness sync",
+      "startMs": 0,
+      "endMs": 0,
+      "startOffsetMin": 8,
+      "durationMin": 30,
+      "organizer": "diego",
+      "attendees": [
+        { "id": "diego", "email": "diego@workgraph.dev", "name": "Diego" },
+        { "id": "alex", "email": "alex@workgraph.dev", "name": "Alex" },
+        { "id": "sam", "email": "sam@workgraph.dev", "name": "Sam" },
+        { "id": "valya", "email": "valya@workgraph.dev", "name": "Valya" }
+      ],
+      "agenda": "Confirm whether we can promise Acme a launch by Friday. Review SSO and Auth Refactor status, the custom export request, and Valya's P0 load.",
+      "agendaDocUrl": "https://docs.internal/acme-launch",
+      "location": "Zoom"
+    },
+    {
+      "id": "featurex-legal-review",
+      "title": "Feature X legal + privacy review",
+      "startMs": 0,
+      "endMs": 0,
+      "startOffsetMin": 12,
+      "durationMin": 25,
+      "organizer": "mira",
+      "attendees": [
+        { "id": "mira", "email": "mira@workgraph.dev", "name": "Mira" },
+        { "id": "diego", "email": "diego@workgraph.dev", "name": "Diego" },
+        { "id": "alex", "email": "alex@workgraph.dev", "name": "Alex" }
+      ],
+      "agenda": "Walk through the Feature X DPA update and data retention risk before any customer commitment leaves the room.",
+      "location": "Frankfurt B"
+    },
+    {
+      "id": "platform-weekly",
+      "title": "Platform weekly",
+      "startMs": 0,
+      "endMs": 0,
+      "startOffsetMin": 45,
+      "durationMin": 60,
+      "organizer": "sam",
+      "attendees": [
+        { "id": "sam", "email": "sam@workgraph.dev", "name": "Sam" },
+        { "id": "valya", "email": "valya@workgraph.dev", "name": "Valya" }
+      ],
+      "agenda": "Dependency chain review: Auth Refactor, SSO, QA stabilization.",
+      "location": "Zoom"
+    }
+  ]
+}

@@ -11,6 +11,7 @@ export async function POST(req: Request) {
     speaker?: string;
     text?: string;
     recentTranscript?: { speaker: string; text: string }[];
+    meetingId?: string;
   };
   try {
     body = await req.json();
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
       speaker: body.speaker || "Speaker",
       text,
       recentTranscript: body.recentTranscript?.slice(-6),
+      meetingId: body.meetingId,
     });
 
     // Write-back loop: off the hot path. The card is already computed; the
