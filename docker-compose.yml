@@ -1,0 +1,46 @@
+services:
+  app:
+    build:
+      context: .
+    command: node server.js
+    env_file:
+      - .env.local
+    environment:
+      PORT: 3000
+      VALKEY_URL: redis://valkey:6379
+      WORKGRAPH_RUNTIME: local-docker
+      WORKGRAPH_REGION: local
+      WORKGRAPH_QUEUE: local Valkey
+      WORKGRAPH_LOAD_BALANCER: "false"
+    ports:
+      - "3000:3000"
+    depends_on:
+      valkey:
+        condition: service_started
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+    command: npm run worker
+    env_file:
+      - .env.local
+    environment:
+      VALKEY_URL: redis://valkey:6379
+      WORKGRAPH_RUNTIME: local-docker
+      WORKGRAPH_REGION: local
+      WORKGRAPH_QUEUE: local Valkey
+    depends_on:
+      valkey:
+        condition: service_started
+    restart: unless-stopped
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    command: valkey-server --appendonly yes
+    volumes:
+      - workgraph-valkey:/data
+    restart: unless-stopped
+
+volumes:
+  workgraph-valkey:

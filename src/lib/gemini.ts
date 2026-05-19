@@ -110,6 +110,123 @@ function factForPrompt(f: MemoryFact) {
   };
 }
 
+function findFact(facts: MemoryFact[], id: string): MemoryFact | undefined {
+  return facts.find((fact) => fact.id === id);
+}
+
+function cardFromFact(
+  fact: MemoryFact,
+  args: AnalyzeArgs,
+  overrides: {
+    collisionType: CollisionCard["collisionType"];
+    title: string;
+    headline: string;
+    suggestedNextStep: string;
+  },
+): CollisionCard {
+  return {
+    id: `${Date.now()}-fallback-${fact.id}`,
+    collisionType: overrides.collisionType,
+    title: overrides.title,
+    headline: overrides.headline,
+    evidence: [{ source: fact.source, quote: fact.statement }],
+    reason: fact.reason,
+    suggestedNextStep: overrides.suggestedNextStep,
+    severity: fact.severity ?? "medium",
+    factIds: [fact.id],
+    triggeredBy: { speaker: args.speaker, text: args.text },
+  };
+}
+
+function fallbackCollisionResult(
+  args: AnalyzeArgs,
+  relevant: MemoryFact[],
+): CollisionResult {
+  const text = [
+    args.recentTranscript?.map((u) => u.text).join(" ") ?? "",
+    args.text,
+  ]
+    .join(" ")
+    .toLowerCase();
+  const allFacts = retrieveRelevant(text, 20);
+
+  const cards: CollisionCard[] = [];
+  const legal = findFact(allFacts, "legal-featurex") ?? findFact(relevant, "legal-featurex");
+  if (
+    legal &&
+    /feature\s*x|dpa|privacy|data|acme/.test(text) &&
+    /launch|ship|release|promise|commit|friday|proceed/.test(text)
+  ) {
+    cards.push(
+      cardFromFact(legal, args, {
+        collisionType: "legal_compliance",
+        title: "Context collision detected",
+        headline: "Feature X cannot be promised until the DPA update is approved.",
+        suggestedNextStep: "Confirm Legal approval before making a customer commitment.",
+      }),
+    );
+  }
+
+  const sso =
+    findFact(allFacts, "dependency-sso-auth") ??
+    findFact(allFacts, "eng-sso-auth") ??
+    findFact(relevant, "dependency-sso-auth");
+  if (
+    sso &&
+    /sso|auth refactor|auth/.test(text) &&
+    /launch|ship|release|friday|today|tomorrow|promise|commit/.test(text)
+  ) {
+    cards.push(
+      cardFromFact(sso, args, {
+        collisionType: "dependency_blocker",
+        title: "Dependency collision detected",
+        headline: "SSO cannot launch before Auth Refactor is complete.",
+        suggestedNextStep: "Move the launch promise behind the Auth Refactor milestone.",
+      }),
+    );
+  }
+
+  const exportDecision =
+    findFact(allFacts, "decision-acme-export") ??
+    findFact(relevant, "decision-acme-export");
+  if (
+    exportDecision &&
+    /acme/.test(text) &&
+    /custom export|export/.test(text) &&
+    /build|create|approve|commit|promise/.test(text)
+  ) {
+    cards.push(
+      cardFromFact(exportDecision, args, {
+        collisionType: "previous_decision",
+        title: "Already decided",
+        headline: "The team already decided not to build a custom export for Acme.",
+        suggestedNextStep: "Reopen the decision explicitly before assigning engineering work.",
+      }),
+    );
+  }
+
+  const valya = findFact(allFacts, "capacity-valya") ?? findFact(relevant, "capacity-valya");
+  if (
+    valya &&
+    /valya/.test(text) &&
+    /p0|top priority|highest priority|urgent|assign|owner/.test(text)
+  ) {
+    cards.push(
+      cardFromFact(valya, args, {
+        collisionType: "priority_capacity",
+        title: "Priority overload detected",
+        headline: "Valya already owns 3 active P0 priorities.",
+        suggestedNextStep: "Downgrade an existing P0 or choose another owner.",
+      }),
+    );
+  }
+
+  return {
+    collisionDetected: cards.length > 0,
+    cards: cards.slice(0, 2),
+  };
+}
+
 export interface AnalyzeArgs {
   speaker: string;
   text: string;
@@ -136,20 +253,29 @@ export async function analyzeUtterance(
     2,
   );
 
-  const { response: res } = await generateContent({
-    model: MODEL,
-    contents: prompt,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      responseSchema,
-      temperature: 0.2,
-      // Snappy on stage; the schema keeps output small anyway.
-      maxOutputTokens: 1200,
-    },
-  });
+  let raw: string | undefined;
+  try {
+    const { response: res } = await generateContent({
+      model: MODEL,
+      contents: prompt,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        responseMimeType: "application/json",
+        responseSchema,
+        temperature: 0.2,
+        // Snappy on stage; the schema keeps output small anyway.
+        maxOutputTokens: 1200,
+      },
+    });
+    raw = res.text;
+  } catch (err) {
+    console.warn(
+      "[collision] Gemini unavailable, using seeded-context fallback:",
+      err instanceof Error ? err.message : err,
+    );
+    return fallbackCollisionResult(args, relevant);
+  }
 
-  const raw = res.text;
   if (!raw) return { collisionDetected: false, cards: [] };
 
   let parsed: { collisionDetected: boolean; cards: Omit<CollisionCard, "id" | "triggeredBy">[] };

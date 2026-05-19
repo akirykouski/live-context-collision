@@ -1,0 +1,30 @@
+services:
+  app:
+    build:
+      context: .
+    image: ${WORKGRAPH_IMAGE:-workgraph-ai:latest}
+    command: node server.js
+    env_file:
+      - .env.production
+    environment:
+      PORT: 3000
+      WORKGRAPH_RUNTIME: ${WORKGRAPH_RUNTIME:-Vultr Cloud Compute}
+      WORKGRAPH_REGION: ${WORKGRAPH_REGION:-EU}
+      WORKGRAPH_QUEUE: ${WORKGRAPH_QUEUE:-Vultr Managed Valkey}
+      WORKGRAPH_LOAD_BALANCER: ${WORKGRAPH_LOAD_BALANCER:-true}
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+    image: ${WORKGRAPH_IMAGE:-workgraph-ai:latest}
+    command: npm run worker
+    env_file:
+      - .env.production
+    environment:
+      WORKGRAPH_RUNTIME: ${WORKGRAPH_RUNTIME:-Vultr Cloud Compute}
+      WORKGRAPH_REGION: ${WORKGRAPH_REGION:-EU}
+      WORKGRAPH_QUEUE: ${WORKGRAPH_QUEUE:-Vultr Managed Valkey}
+    restart: unless-stopped

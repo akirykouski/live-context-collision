@@ -5,6 +5,8 @@
 .DS_Store
 *.pem
 .env
+.env.docker
+.env.production
 .env*.local
 .vercel
 *.tsbuildinfo
