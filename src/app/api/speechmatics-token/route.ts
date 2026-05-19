@@ -10,7 +10,7 @@ import type { AdditionalVocabEntry } from "@/lib/types";
 // transcription_config.additional_vocab before recognition starts.
 export const dynamic = "force-dynamic";
 
-export async function GET(req?: Request) {
+export async function GET(req: Request) {
   const apiKey = process.env.SPEECHMATICS_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
@@ -31,9 +31,13 @@ export async function GET(req?: Request) {
     // guard so a vocab problem degrades to an empty list, not a 502.
     let additionalVocab: AdditionalVocabEntry[] = [];
     try {
-      const meetingId =
-        (req ? new URL(req.url).searchParams.get("meetingId") : null) ??
-        undefined;
+      let meetingId: string | undefined;
+      try {
+        meetingId = new URL(req.url).searchParams.get("meetingId") ?? undefined;
+      } catch {
+        // A malformed/relative URL must not break the token mint.
+        meetingId = undefined;
+      }
       additionalVocab = await buildAdditionalVocab({ meetingId });
     } catch (vocabErr) {
       console.warn(
