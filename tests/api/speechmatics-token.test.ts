@@ -13,6 +13,10 @@ vi.mock("@/lib/transcript/dictionary-builder", () => ({
 
 import { GET } from "@/app/api/speechmatics-token/route";
 
+// Next.js always passes a Request to a GET handler; default to one with no
+// query so meetingId resolves to undefined.
+const req = (url = "http://t/api/speechmatics-token") => new Request(url);
+
 beforeEach(() => {
   createSpeechmaticsJWT.mockReset();
   buildAdditionalVocab.mockClear();
@@ -25,7 +29,7 @@ afterEach(() => {
 
 describe("GET /api/speechmatics-token", () => {
   it("500s when the API key is not configured", async () => {
-    const res = await GET();
+    const res = await GET(req());
     expect(res.status).toBe(500);
     expect(await res.json()).toEqual({
       error: "SPEECHMATICS_API_KEY is not set",
@@ -36,7 +40,7 @@ describe("GET /api/speechmatics-token", () => {
   it("mints a JWT and returns the Layer 1 additional_vocab payload", async () => {
     process.env.SPEECHMATICS_API_KEY = "sm-secret";
     createSpeechmaticsJWT.mockResolvedValueOnce("jwt-token");
-    const res = await GET();
+    const res = await GET(req());
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       jwt: "jwt-token",
@@ -59,10 +63,10 @@ describe("GET /api/speechmatics-token", () => {
     expect(buildAdditionalVocab).toHaveBeenCalledWith({ meetingId: "mtg-9" });
   });
 
-  it("works with no request object (meetingId omitted)", async () => {
+  it("omits meetingId when it is absent from the query", async () => {
     process.env.SPEECHMATICS_API_KEY = "sm-secret";
     createSpeechmaticsJWT.mockResolvedValueOnce("jwt-token");
-    const res = await GET();
+    const res = await GET(req());
     expect(res.status).toBe(200);
     expect(buildAdditionalVocab).toHaveBeenCalledWith({ meetingId: undefined });
   });
@@ -71,7 +75,7 @@ describe("GET /api/speechmatics-token", () => {
     process.env.SPEECHMATICS_API_KEY = "sm-secret";
     createSpeechmaticsJWT.mockResolvedValueOnce("jwt-token");
     buildAdditionalVocab.mockRejectedValueOnce(new Error("vocab boom"));
-    const res = await GET();
+    const res = await GET(req());
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
       jwt: "jwt-token",
@@ -82,7 +86,7 @@ describe("GET /api/speechmatics-token", () => {
   it("502s when token minting fails", async () => {
     process.env.SPEECHMATICS_API_KEY = "sm-secret";
     createSpeechmaticsJWT.mockRejectedValueOnce(new Error("auth refused"));
-    const res = await GET();
+    const res = await GET(req());
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ error: "auth refused" });
   });
