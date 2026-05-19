@@ -1,0 +1,11 @@
+.git
+.next
+node_modules
+npm-debug.log*
+.env
+.env.*
+!.env.docker.example
+Dockerfile
+docker-compose*.yml
+README.md
+VULTR_RUNTIME_IMPLEMENTATION_PLAN.md

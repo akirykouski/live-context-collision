@@ -643,6 +643,65 @@ body::after {
   color: var(--text-dim);
   font-size: 13px;
 }
+.runtime-panel {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.55fr) 1.45fr;
+  gap: 18px;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--signal);
+  background: linear-gradient(
+    180deg,
+    rgba(216, 255, 62, 0.045),
+    rgba(216, 255, 62, 0.012)
+  );
+  border-radius: 3px;
+  padding: 18px;
+  margin-bottom: 20px;
+}
+.runtime-eyebrow {
+  font-family: var(--font-mono), monospace;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--signal);
+  margin-bottom: 8px;
+}
+.runtime-title {
+  font-family: var(--font-display), serif;
+  font-size: 22px;
+  line-height: 1.2;
+  color: #fff;
+}
+.runtime-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+.runtime-grid div {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 10px 12px;
+  min-width: 0;
+}
+.runtime-grid span {
+  display: block;
+  font-family: var(--font-mono), monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 5px;
+}
+.runtime-grid b {
+  display: block;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
 .action-feed {
   border-top: 1px solid var(--line);
   padding-top: 16px;
@@ -1157,6 +1216,10 @@ body::after {
     margin-left: 0;
   }
   .agent-strip {
+    grid-template-columns: 1fr;
+  }
+  .runtime-panel,
+  .runtime-grid {
     grid-template-columns: 1fr;
   }
   .actions-head {

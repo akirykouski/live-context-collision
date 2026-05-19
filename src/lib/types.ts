@@ -203,9 +203,49 @@ export interface ServiceAction {
 export interface WorkContextResult {
   artifacts: WorkArtifact[];
   actions: ServiceAction[];
+  queue?: ServiceQueueSummary;
 }
 
 export interface ServiceActionResult {
   actionDetected: boolean;
   actions: ServiceAction[];
+  queued?: boolean;
+  jobId?: string;
+}
+
+export type ServiceJobStatus = "queued" | "active" | "completed" | "failed";
+
+export interface ServiceActionJobData {
+  speaker: string;
+  text: string;
+  recentTranscript?: { speaker: string; text: string }[];
+}
+
+export interface ServiceJobSnapshot {
+  id: string;
+  status: ServiceJobStatus;
+  actionIds: string[];
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ServiceQueueSummary {
+  waiting: number;
+  active: number;
+  completed: number;
+  failed: number;
+}
+
+export interface DeploymentInfo {
+  runtime: string;
+  region: string;
+  queue: string;
+  loadBalancer: boolean;
+  rawAudioStored: false;
+  transcriptTtl: string;
+  serverSideKeys: true;
+  modules: string[];
+  valkeyConfigured: boolean;
+  timestamp: string;
 }

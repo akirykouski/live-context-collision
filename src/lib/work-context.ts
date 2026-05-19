@@ -1,6 +1,12 @@
 import { readFile, writeFile } from "fs/promises";
 import path from "path";
 import type { ServiceAction, WorkArtifact, WorkContextResult } from "./types";
+import {
+  appendRuntimeActions,
+  getRuntimeActions,
+  resetRuntimeActions,
+} from "./runtime-store";
+import { getServiceQueueSummary } from "./queue";
 
 interface WorkContextSeed {
   artifacts: WorkArtifact[];
@@ -11,8 +17,11 @@ interface RuntimeActionsFile {
 }
 
 const DATA_DIR = path.join(process.cwd(), "src", "data");
-const SEED_PATH = path.join(DATA_DIR, "work-context.json");
-const RUNTIME_PATH = path.join(DATA_DIR, "work-actions.runtime.json");
+const SEED_PATH =
+  process.env.WORK_CONTEXT_PATH || path.join(DATA_DIR, "work-context.json");
+const RUNTIME_PATH =
+  process.env.WORK_ACTIONS_PATH ||
+  path.join(DATA_DIR, "work-actions.runtime.json");
 
 function clone<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T;
@@ -39,6 +48,9 @@ export async function getSeedArtifacts(): Promise<WorkArtifact[]> {
 }
 
 export async function getServiceActions(): Promise<ServiceAction[]> {
+  const valkeyActions = await getRuntimeActions();
+  if (valkeyActions) return valkeyActions;
+
   const runtime = await readJson<RuntimeActionsFile>(RUNTIME_PATH, {
     actions: [],
   });
@@ -59,20 +71,25 @@ export function applyActionsToArtifacts(
 }
 
 export async function getWorkContext(): Promise<WorkContextResult> {
-  const [seedArtifacts, actions] = await Promise.all([
+  const [seedArtifacts, actions, queue] = await Promise.all([
     getSeedArtifacts(),
     getServiceActions(),
+    getServiceQueueSummary(),
   ]);
 
   return {
     artifacts: applyActionsToArtifacts(seedArtifacts, actions),
     actions,
+    queue: queue ?? undefined,
   };
 }
 
 export async function appendServiceActions(
   nextActions: ServiceAction[],
 ): Promise<ServiceAction[]> {
+  const valkeyActions = await appendRuntimeActions(nextActions);
+  if (valkeyActions) return valkeyActions;
+
   if (nextActions.length === 0) return getServiceActions();
   const current = await getServiceActions();
   const merged = [...current, ...nextActions];
@@ -81,6 +98,9 @@ export async function appendServiceActions(
 }
 
 export async function resetServiceActions(): Promise<ServiceAction[]> {
+  const valkeyActions = await resetRuntimeActions();
+  if (valkeyActions) return valkeyActions;
+
   await writeRuntime([]);
   return [];
 }

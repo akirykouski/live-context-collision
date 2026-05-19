@@ -217,6 +217,181 @@ function changedWithoutTimestamp(before: WorkArtifact, after: WorkArtifact) {
   return JSON.stringify(strip(before)) !== JSON.stringify(strip(after));
 }
 
+function extractAssignee(text: string): string | undefined {
+  const match = text.match(/\b(?:to|owner to|assign(?:ed)? to|reassign(?:ed)? to)\s+([A-Z][a-z]+)\b/);
+  return match?.[1];
+}
+
+function extractPriority(text: string): WorkPriority | undefined {
+  const priority = text.match(/\bP[0-3]\b/i)?.[0]?.toUpperCase();
+  if (isOneOf(priority, PRIORITIES)) return priority as WorkPriority;
+  if (/\b(high|urgent|highest|top priority)\b/i.test(text)) return "P0";
+  if (/\bmedium\b/i.test(text)) return "P1";
+  if (/\blow\b/i.test(text)) return "P3";
+  return undefined;
+}
+
+function createFallbackAction(
+  args: AnalyzeServiceActionArgs,
+  action: {
+    agent: ServiceAgentKind;
+    actionType: ServiceActionType;
+    artifactKind: WorkArtifactKind;
+    title: string;
+    rationale: string;
+    before?: WorkArtifact;
+    after: WorkArtifact;
+  },
+  index: number,
+): ServiceAction {
+  return {
+    id: `svc-${Date.now()}-fallback-${index}`,
+    agent: action.agent,
+    actionType: action.actionType,
+    artifactKind: action.artifactKind,
+    artifactId: action.after.id,
+    title: action.title,
+    rationale: action.rationale,
+    basedOn: { speaker: args.speaker, text: args.text },
+    before: action.before,
+    after: action.after,
+    status: "applied",
+    createdAt: Date.now(),
+  };
+}
+
+function fallbackServiceActions(args: AnalyzeServiceActionArgs): ServiceActionResult {
+  const text = args.text.trim();
+  const lower = text.toLowerCase();
+  const actions: ServiceAction[] = [];
+  const nowIso = new Date().toISOString();
+  const assignee = extractAssignee(text);
+  const priority = extractPriority(text);
+
+  if (
+    /\b(github|gh|issue|repo|webhook|auth refactor|sso)\b/.test(lower) &&
+    /\b(reassign|assign|owner|priority|p[0-3]|high|urgent|update|move)\b/.test(lower)
+  ) {
+    const before =
+      args.artifacts.find((artifact) => artifact.id === "gh-auth-refactor") ??
+      args.artifacts.find((artifact) => artifact.kind === "github_issue");
+    if (before) {
+      const after: WorkArtifact = {
+        ...before,
+        assignee: assignee ?? before.assignee,
+        priority: priority ?? before.priority,
+        updatedAt: nowIso,
+      };
+      if (changedWithoutTimestamp(before, after)) {
+        actions.push(
+          createFallbackAction(
+            args,
+            {
+              agent: "github",
+              actionType: assignee ? "reassign" : "change_priority",
+              artifactKind: "github_issue",
+              title: "Update GitHub issue from meeting",
+              rationale: "The speaker gave an explicit GitHub issue ownership or priority change.",
+              before,
+              after,
+            },
+            actions.length,
+          ),
+        );
+      }
+    }
+  }
+
+  if (
+    /\b(jira|notion|task|ticket|acme launch|feature x)\b/.test(lower) &&
+    /\b(reassign|assign|owner|priority|status|update|move|block|in progress|done)\b/.test(lower)
+  ) {
+    const before =
+      args.artifacts.find((artifact) =>
+        /feature\s*x/.test(lower)
+          ? artifact.id === "notion-featurex-decision"
+          : artifact.id === "jira-acme-launch",
+      ) ?? args.artifacts.find((artifact) => artifact.kind === "jira_task");
+    if (before) {
+      const nextStatus = /\b(done|complete|completed)\b/.test(lower)
+        ? "done"
+        : /\b(block|blocked)\b/.test(lower)
+          ? "blocked"
+          : /\bin progress\b/.test(lower)
+            ? "in_progress"
+            : before.status;
+      const after: WorkArtifact = {
+        ...before,
+        assignee: assignee ?? before.assignee,
+        priority: priority ?? before.priority,
+        status: nextStatus,
+        updatedAt: nowIso,
+      };
+      if (changedWithoutTimestamp(before, after)) {
+        actions.push(
+          createFallbackAction(
+            args,
+            {
+              agent: "jira_notion",
+              actionType: assignee
+                ? "reassign"
+                : priority
+                  ? "change_priority"
+                  : "change_status",
+              artifactKind: before.kind,
+              title: "Update project task from meeting",
+              rationale: "The speaker gave an explicit Jira/Notion task update.",
+              before,
+              after,
+            },
+            actions.length,
+          ),
+        );
+      }
+    }
+  }
+
+  if (
+    /\b(email|gmail|draft|send|reply|customer|acme)\b/.test(lower) &&
+    /\b(draft|email|send|reply|tell|message)\b/.test(lower)
+  ) {
+    const draftTitle = /legal|dpa|feature\s*x/.test(lower)
+      ? "Draft Acme note about Feature X approval"
+      : "Draft customer follow-up from meeting";
+    const after: WorkArtifact = {
+      id: `draft-${slugify(draftTitle)}-${Date.now().toString(36)}`,
+      kind: "email_draft",
+      title: draftTitle,
+      status: "draft",
+      customer: /acme/.test(lower) ? "Acme" : undefined,
+      source: "Live meeting",
+      urlLabel: "Gmail draft",
+      body:
+        "Hi team,\n\nQuick follow-up from today's call: we should avoid promising a launch date until the relevant blocker is resolved. I will send a cleaner customer-facing update once Legal and Engineering confirm the next safe milestone.\n\nBest,",
+      updatedAt: nowIso,
+    };
+    actions.push(
+      createFallbackAction(
+        args,
+        {
+          agent: "gmail",
+          actionType: "create_draft",
+          artifactKind: "email_draft",
+          title: "Create Gmail draft from meeting",
+          rationale: "The speaker asked for customer/team communication to be drafted.",
+          after,
+        },
+        actions.length,
+      ),
+    );
+  }
+
+  return {
+    actionDetected: actions.length > 0,
+    actions: actions.slice(0, 3),
+  };
+}
+
 function applyCandidate(
   candidate: Candidate,
   artifacts: WorkArtifact[],
@@ -317,19 +492,28 @@ export async function analyzeServiceActions(
     2,
   );
 
-  const { response } = await generateContent({
-    model: MODEL,
-    contents: prompt,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: "application/json",
-      responseSchema,
-      temperature: 0.15,
-      maxOutputTokens: 1800,
-    },
-  });
+  let raw: string | undefined;
+  try {
+    const { response } = await generateContent({
+      model: MODEL,
+      contents: prompt,
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        responseMimeType: "application/json",
+        responseSchema,
+        temperature: 0.15,
+        maxOutputTokens: 1800,
+      },
+    });
+    raw = response.text;
+  } catch (err) {
+    console.warn(
+      "[service-actions] Gemini unavailable, using seeded-context fallback:",
+      err instanceof Error ? err.message : err,
+    );
+    return fallbackServiceActions(args);
+  }
 
-  const raw = response.text;
   if (!raw) return { actionDetected: false, actions: [] };
 
   let parsed: { actionDetected?: boolean; actions?: Candidate[] };

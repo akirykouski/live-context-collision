@@ -6,11 +6,14 @@ import seed from "@/data/memory.json";
 import peopleSeed from "@/data/people.json";
 import type {
   CollisionCard,
+  DeploymentInfo,
   MemoryFact,
   Person,
   PersonalSummary,
   ServiceAction,
   ServiceAgentKind,
+  ServiceJobSnapshot,
+  ServiceQueueSummary,
   Utterance,
   WorkArtifact,
 } from "@/lib/types";
@@ -99,6 +102,13 @@ export default function Page() {
   const [workArtifacts, setWorkArtifacts] = useState<WorkArtifact[]>([]);
   const [serviceActions, setServiceActions] = useState<ServiceAction[]>([]);
   const [serviceNotice, setServiceNotice] = useState<string | null>(null);
+  const [pendingJobIds, setPendingJobIds] = useState<string[]>([]);
+  const [queueSummary, setQueueSummary] = useState<ServiceQueueSummary | null>(
+    null,
+  );
+  const [deploymentInfo, setDeploymentInfo] = useState<DeploymentInfo | null>(
+    null,
+  );
   const transcriptRef = useRef<HTMLDivElement>(null);
   const cardsRef = useRef<HTMLDivElement>(null);
   const histRef = useRef<{ speaker: string; text: string }[]>([]);
@@ -119,6 +129,7 @@ export default function Page() {
       if (!res.ok) throw new Error(data?.error || "work context error");
       setWorkArtifacts(data.artifacts ?? []);
       setServiceActions([...(data.actions ?? [])].reverse());
+      setQueueSummary(data.queue ?? null);
     } catch {
       /* Action Center should not block the live meeting surface. */
     }
@@ -127,6 +138,20 @@ export default function Page() {
   useEffect(() => {
     void loadWorkContext();
   }, [loadWorkContext]);
+
+  useEffect(() => {
+    async function loadDeploymentInfo() {
+      try {
+        const res = await fetch("/api/deployment");
+        const data = await res.json();
+        if (!res.ok) return;
+        setDeploymentInfo(data as DeploymentInfo);
+      } catch {
+        /* deployment metadata is demo garnish, not a blocker */
+      }
+    }
+    void loadDeploymentInfo();
+  }, []);
 
   const analyze = useCallback(async (
     u: Utterance,
@@ -165,8 +190,20 @@ export default function Page() {
           }),
         });
         const data = await res.json();
+        if (!res.ok) return;
+
+        if (data.queued && data.jobId) {
+          setPendingJobIds((prev) =>
+            prev.includes(data.jobId) ? prev : [...prev, data.jobId],
+          );
+          setServiceNotice("Service agent job queued");
+          window.setTimeout(() => setServiceNotice(null), 3200);
+          void loadWorkContext();
+          return;
+        }
+
         const actions = (data.actions ?? []) as ServiceAction[];
-        if (!res.ok || actions.length === 0) return;
+        if (actions.length === 0) return;
 
         setServiceActions((prev) => [...[...actions].reverse(), ...prev]);
         setWorkArtifacts((prev) => applyActionsLocal(prev, actions));
@@ -182,8 +219,38 @@ export default function Page() {
         /* keep the meeting flowing even if an agent misses a turn */
       }
     },
-    [],
+    [loadWorkContext],
   );
+
+  useEffect(() => {
+    if (pendingJobIds.length === 0) return;
+
+    const interval = window.setInterval(() => {
+      void (async () => {
+        await loadWorkContext();
+        const settled = new Set<string>();
+        await Promise.all(
+          pendingJobIds.map(async (jobId) => {
+            try {
+              const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`);
+              if (!res.ok) return;
+              const job = (await res.json()) as ServiceJobSnapshot;
+              if (job.status === "completed" || job.status === "failed") {
+                settled.add(jobId);
+              }
+            } catch {
+              /* keep polling; the worker may still be alive */
+            }
+          }),
+        );
+        if (settled.size > 0) {
+          setPendingJobIds((prev) => prev.filter((id) => !settled.has(id)));
+        }
+      })();
+    }, 2000);
+
+    return () => window.clearInterval(interval);
+  }, [loadWorkContext, pendingJobIds]);
 
   const onUtterance = useCallback(
     (u: Utterance) => {
@@ -258,6 +325,7 @@ export default function Page() {
       const res = await fetch("/api/work-context/reset", { method: "POST" });
       if (!res.ok) return;
       setServiceActions([]);
+      setPendingJobIds([]);
       await loadWorkContext();
     } catch {
       /* local demo reset failed; leave the current view untouched */
@@ -429,6 +497,9 @@ export default function Page() {
         <ActionCenter
           artifacts={workArtifacts}
           actions={serviceActions}
+          queue={queueSummary}
+          deployment={deploymentInfo}
+          pendingJobs={pendingJobIds.length}
           onReset={resetActions}
         />
       )}
@@ -459,6 +530,9 @@ export default function Page() {
 interface ActionCenterProps {
   artifacts: WorkArtifact[];
   actions: ServiceAction[];
+  queue: ServiceQueueSummary | null;
+  deployment: DeploymentInfo | null;
+  pendingJobs: number;
   onReset: () => void;
 }
 
@@ -521,7 +595,14 @@ function fieldDiffs(action: ServiceAction) {
     }));
 }
 
-function ActionCenter({ artifacts, actions, onReset }: ActionCenterProps) {
+function ActionCenter({
+  artifacts,
+  actions,
+  queue,
+  deployment,
+  pendingJobs,
+  onReset,
+}: ActionCenterProps) {
   const watchedByAgent = AGENT_ORDER.map((agent) => ({
     agent,
     artifacts: artifacts.filter((artifact) => agentForArtifact(artifact.kind) === agent),
@@ -534,7 +615,10 @@ function ActionCenter({ artifacts, actions, onReset }: ActionCenterProps) {
         <div>
           <div className="actions-eyebrow">Service agent layer</div>
           <h1>Action Center</h1>
-          <p>{actions.length} applied updates · {artifacts.length} artifacts watched</p>
+          <p>
+            {actions.length} applied updates · {artifacts.length} artifacts
+            watched · {pendingJobs} queued jobs
+          </p>
         </div>
         <button
           className="modal-close"
@@ -562,6 +646,12 @@ function ActionCenter({ artifacts, actions, onReset }: ActionCenterProps) {
         ))}
       </section>
 
+      <RuntimePanel
+        deployment={deployment}
+        queue={queue}
+        pendingJobs={pendingJobs}
+      />
+
       <section className="action-feed">
         <div className="feed-head">
           <span>Operational trail</span>
@@ -581,6 +671,61 @@ function ActionCenter({ artifacts, actions, onReset }: ActionCenterProps) {
         )}
       </section>
     </main>
+  );
+}
+
+function RuntimePanel({
+  deployment,
+  queue,
+  pendingJobs,
+}: {
+  deployment: DeploymentInfo | null;
+  queue: ServiceQueueSummary | null;
+  pendingJobs: number;
+}) {
+  const runtime = deployment?.runtime ?? "local-dev";
+  const region = deployment?.region ?? "local";
+  const queueLabel = deployment?.queue ?? "JSON fallback";
+  const valkeyState = deployment?.valkeyConfigured ? "enabled" : "fallback";
+
+  return (
+    <section className="runtime-panel">
+      <div>
+        <div className="runtime-eyebrow">Vultr Runtime</div>
+        <div className="runtime-title">
+          {runtime} · {region}
+        </div>
+      </div>
+      <div className="runtime-grid">
+        <div>
+          <span>Queue</span>
+          <b>{queueLabel}</b>
+        </div>
+        <div>
+          <span>Valkey</span>
+          <b>{valkeyState}</b>
+        </div>
+        <div>
+          <span>Jobs</span>
+          <b>
+            {pendingJobs} pending
+            {queue ? ` · ${queue.completed} done` : ""}
+          </b>
+        </div>
+        <div>
+          <span>Raw audio</span>
+          <b>{deployment?.rawAudioStored === false ? "not stored" : "unknown"}</b>
+        </div>
+        <div>
+          <span>Transcript TTL</span>
+          <b>{deployment?.transcriptTtl ?? "24h"}</b>
+        </div>
+        <div>
+          <span>Load balancer</span>
+          <b>{deployment?.loadBalancer ? "enabled" : "ready"}</b>
+        </div>
+      </div>
+    </section>
   );
 }
 

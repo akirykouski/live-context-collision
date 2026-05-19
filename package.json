@@ -7,6 +7,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start -p ${PORT:-3000}",
+    "worker": "tsx src/worker/index.ts",
+    "docker:build": "docker compose build",
+    "docker:up": "docker compose up -d",
+    "docker:logs": "docker compose logs -f",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },
@@ -14,6 +18,8 @@
     "@google/genai": "^2.3.0",
     "@speechmatics/auth": "^0.1.0",
     "@speechmatics/real-time-client": "^8.3.2",
+    "bullmq": "^5.76.10",
+    "ioredis": "^5.10.1",
     "next": "15.1.6",
     "react": "19.0.0",
     "react-dom": "19.0.0"
@@ -22,6 +28,7 @@
     "@types/node": "^22.10.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "tsx": "^4.22.2",
     "typescript": "^5.7.0"
   }
 }
