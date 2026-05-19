@@ -173,6 +173,9 @@ export async function generateContent(
   );
 }
 
+/** Internal helpers exposed for unit testing only. Not part of the public API. */
+export const __test__ = { isRetryable, collectKeys };
+
 /** Snapshot of pool health, for an optional status endpoint / demo HUD. */
 export function gatewayStatus() {
   const now = Date.now();

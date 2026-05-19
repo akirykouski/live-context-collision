@@ -542,3 +542,11 @@ export async function analyzeServiceActions(
     actions,
   };
 }
+
+/** Internal helpers exposed for unit testing only. Not part of the public API. */
+export const __test__ = {
+  slugify,
+  makeArtifactId,
+  changedWithoutTimestamp,
+  applyCandidate,
+};
